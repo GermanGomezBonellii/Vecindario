@@ -140,7 +140,9 @@ export class UI {
     });
     this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
     this.buildThemeShelf();
-    this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
+    // Un solo panel, dos disparadores: el de la barra en desktop y el del panel en mobile.
+    this.logicToggles = [...document.querySelectorAll('[data-logic-toggle]')];
+    for (const btn of this.logicToggles) btn.addEventListener('click', () => this.toggleLogicPanel());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
     this.el.retryBtn.addEventListener('click', () => this.game.retry());
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
@@ -160,8 +162,10 @@ export class UI {
   toggleLogicPanel(force = null) {
     const shouldOpen = force == null ? this.el.debugPanel.hidden : Boolean(force);
     this.el.debugPanel.hidden = !shouldOpen;
-    this.el.logicToggle.setAttribute('aria-expanded', String(shouldOpen));
-    this.el.logicToggle.classList.toggle('is-active', shouldOpen);
+    for (const btn of this.logicToggles || [this.el.logicToggle]) {
+      btn.setAttribute('aria-expanded', String(shouldOpen));
+      btn.classList.toggle('is-active', shouldOpen);
+    }
     if (shouldOpen) this.updateDebug();
   }
 

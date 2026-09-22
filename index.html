@@ -24,11 +24,13 @@
         <span class="seed-label" id="seedLabel" hidden></span>
       </div>
       <div class="statusbar" data-copy-aria="aria.status">
-        <div class="status-item"><span class="status-kicker" data-copy="labels.level"></span><strong id="levelValue">1</strong></div>
-        <div class="status-item"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></div>
-        <div class="status-item"><span class="status-kicker" data-copy="labels.lives"></span><strong id="livesValue">● ● ●</strong></div>
-        <button class="status-item time-status theme-toggle" id="timeStatus" type="button" data-copy-aria="aria.night"><span class="status-kicker" data-copy="labels.environment"></span><strong id="timeValue">☼ CLARO</strong></button>
-        <button id="logicToggle" class="logic-toggle" type="button" aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic"><span class="logic-symbol" aria-hidden="true">∑</span><span class="logic-caption" data-copy="labels.logic"></span></button>
+        <div class="status-item status-level"><span class="status-kicker" data-copy="labels.level"></span><strong id="levelValue">1</strong></div>
+        <div class="status-stats">
+          <div class="status-item"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></div>
+          <div class="status-item"><span class="status-kicker" data-copy="labels.lives"></span><strong id="livesValue">● ● ●</strong></div>
+          <button class="status-item time-status theme-toggle" id="timeStatus" type="button" data-copy-aria="aria.night"><span class="status-kicker" data-copy="labels.environment"></span><strong id="timeValue">☼ CLARO</strong></button>
+        </div>
+        <button id="logicToggle" class="logic-toggle" type="button" data-logic-toggle aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic"><span class="logic-symbol" aria-hidden="true">∑</span><span class="logic-caption" data-copy="labels.logic"></span></button>
         <div class="language-switch" role="group" data-copy-aria="aria.language">
           <button type="button" data-language="es" data-copy-aria="aria.es" aria-pressed="true">ES</button>
           <span aria-hidden="true">/</span>
@@ -69,6 +71,7 @@
             <span class="eyebrow" data-copy="labels.selected"></span>
             <span id="selectedState" class="selected-state" data-copy="labels.none"></span>
           </div>
+          <button id="logicTogglePanel" class="logic-toggle logic-toggle-panel" type="button" data-logic-toggle aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic"><span class="logic-symbol" aria-hidden="true">∑</span><span class="logic-caption" data-copy="labels.logic"></span></button>
           <div class="action-grid">
             <button id="interrogateBtn" class="action primary" type="button" disabled data-copy="actions.interrogate"></button>
             <button id="suspectBtn" class="action" type="button" disabled data-copy="actions.suspect"></button>

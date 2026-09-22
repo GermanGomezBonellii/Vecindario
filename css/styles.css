@@ -306,6 +306,11 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .brand-wrap { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .seed-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statusbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* En desktop el envoltorio se disuelve: PUNTOS, VIDAS y AMBIENTE siguen siendo
+   hijos directos de la barra y el layout de escritorio no cambia. */
+.status-stats { display: contents; }
+/* El disparador del panel solo existe en mobile; en desktop manda el de la barra. */
+.logic-toggle.logic-toggle-panel { display: none; }
 .status-item { min-width: 74px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--surface) 82%, transparent); color: var(--ink); text-align: left; }
 .theme-toggle { cursor: pointer; transition: transform 120ms ease, background var(--transition), border-color var(--transition); }
 .theme-toggle:not(:disabled):active { transform: scale(.97); }
@@ -484,14 +489,18 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 }
 
 @media (max-width: 520px) {
-  .topbar { margin-bottom: 10px; }
-  .brand { font-size: 25px; }
-  .statusbar { gap: 5px; }
-  .status-item { min-width: 54px; }
+  .topbar { margin-bottom: 10px; gap: 6px; }
   .status-kicker { font-size: 7px; }
   .icon-button { width: 36px; height: 36px; }
-  .logic-toggle { min-width: 38px; padding: 8px; justify-content:center; }
-  .logic-toggle .logic-caption { display:block; }
+  .status-stats { gap: 5px; }
+  .status-stats > .status-item { padding: 7px 4px; min-height: 44px; }
+  .status-level { padding: 6px 8px; }
+  .status-level strong { font-size: 13px; }
+  #livesValue { gap: 3px; font-size: 13px; }
+  /* El selector de idioma se achica antes que empujar la fila fuera de pantalla. */
+  .language-switch { padding: 1px; gap: 0; }
+  .language-switch > span { display: none; }
+  .language-switch button { min-width: 28px; min-height: 30px; padding: 4px 5px; font-size: 11px; }
   .mode-options { grid-template-columns: 1fr; }
   .modal-actions.stacked-mobile { flex-direction: column-reverse; }
   .modal-actions.stacked-mobile button { width: 100%; }
@@ -525,12 +534,77 @@ button:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--focus); }
 button:disabled { background: var(--disabled-bg) !important; color: var(--disabled-text) !important; border-color: var(--border) !important; opacity: 1 !important; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .app, .app *, body { transition: none !important; } .sea-foam { animation: none !important; } }
 
-/* A single scrolling control rail; only the brand sits above it on mobile. */
+/* Cabecera mobile: dos filas que siempre entran en el ancho visible, sin scroll
+   horizontal. Fila 1: título + NIVEL + idioma. Fila 2: PUNTOS, VIDAS y AMBIENTE en
+   tres columnas iguales. LÓGICA se va al panel, que es donde corresponde. */
 @media (max-width: 880px) {
-  .topbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
-  .statusbar { width: 100%; max-width: 100%; min-width: 0; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: var(--border) transparent; padding: 4px 3px 6px; }
-  .statusbar > * { flex: 0 0 auto; white-space: nowrap; }
-  .statusbar::-webkit-scrollbar { height: 3px; }
-  .statusbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .statusbar .logic-toggle { padding: 4px 6px; min-width: 44px; }
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand level lang" "stats stats stats";
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .brand-wrap { grid-area: brand; min-width: 0; }
+  .brand { font-size: clamp(21px, 7vw, 34px); }
+  /* La barra se disuelve para que sus bloques se ubiquen en la grilla del header. */
+  .statusbar { display: contents; }
+  .status-level { grid-area: level; }
+  .language-switch { grid-area: lang; }
+  .statusbar > .logic-toggle { display: none; }
+
+  .status-stats {
+    grid-area: stats;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    min-width: 0;
+  }
+  /* Misma altura para los tres, sin importar el largo del contenido. */
+  .status-stats > .status-item {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 6px;
+    text-align: center;
+    min-height: 46px;
+  }
+  /* El nombre del ambiente es el texto más largo: se aprieta antes de partirse. */
+  .status-stats .time-status strong { letter-spacing: 0; font-size: clamp(9px, 2.75vw, 12px); }
+  .status-stats .status-item strong {
+    font-size: clamp(10px, 3.1vw, 13px);
+    line-height: 1.15;
+    letter-spacing: .02em;
+    overflow-wrap: anywhere;
+  }
+  .status-level {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 7px 10px;
+    text-align: center;
+  }
+  .status-level strong { font-size: 14px; }
+  #livesValue { justify-content: center; gap: 4px; }
+
+  .logic-toggle.logic-toggle-panel {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-top: 10px;
+    min-height: 34px;
+    min-width: 0;
+    padding: 5px 10px;
+    border-color: var(--border);
+    font-size: 10px;
+  }
+  .logic-toggle-panel .logic-symbol { font-size: 15px; }
+  .logic-toggle-panel .logic-caption { font-size: 9px; letter-spacing: .08em; }
 }
