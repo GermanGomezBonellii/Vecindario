@@ -1,0 +1,1481 @@
+/* Vecindario browser bundle. Generated from modular source files so the game also works when index.html is opened directly with file:\/\/. */
+(() => {
+'use strict';
+
+// ---- config.js ----
+const CONFIG = {
+  GAME_NAME: 'Vecindario',
+  BASE_SCORE: 3000,
+  SCORE_PER_LEVEL: 350,
+  INTERROGATION_COST: 100,
+  HINT_COST: 500,
+  WRONG_ACCUSATION_COST: 300,
+  STARTING_LIVES: 3,
+  START_HOUR: 17,
+  SUNSET_HOUR: 18,
+  NIGHT_HOUR: 20,
+  GENERATION_ATTEMPTS: 700,
+  MIN_STANDALONE_CANDIDATES: 2, // Ningún interrogatorio puede resolver el caso por sí solo.
+  // Las pistas de distancia se conservan, pero son una excepción deliberada y no
+  // la forma habitual de describir el barrio.
+  CLUE_FAMILY_WEIGHTS: {
+    direction: 1,
+    street: 0.9,
+    distance: 0.03,
+  },
+  DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
+  DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
+};
+
+// ---- rng.js ----
+function hashString(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function createRng(seed) {
+  let a = hashString(String(seed)) || 0x6d2b79f5;
+  const next = () => {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  next.int = (min, maxInclusive) => Math.floor(next() * (maxInclusive - min + 1)) + min;
+  next.pick = (arr) => arr[Math.floor(next() * arr.length)];
+  next.shuffle = (arr) => {
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(next() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
+  return next;
+}
+
+function randomSeed() {
+  const time = Date.now().toString(36);
+  const rand = Math.floor(Math.random() * 0xffffff).toString(36);
+  return `${time}-${rand}`;
+}
+
+// ---- map.js ----
+const SVG_W = 1000;
+const SVG_H = 700;
+const MARGIN_X = 76;
+const MARGIN_Y = 72;
+
+function nodeId(c, r) { return `N${c}_${r}`; }
+function hStreetKey(r) { return `H${r}`; }
+function vStreetKey(c) { return `V${c}`; }
+
+function makeAxis(rng, count, min, max, jitter = 0) {
+  if (!jitter) return Array.from({ length: count + 1 }, (_, i) => min + (i * (max - min)) / count);
+  const weights = Array.from({ length: count }, () => 1 + (rng() - 0.5) * 2 * jitter);
+  const total = weights.reduce((a, b) => a + b, 0);
+  const out = [min];
+  let cursor = min;
+  for (const weight of weights) {
+    cursor += ((max - min) * weight) / total;
+    out.push(cursor);
+  }
+  out[out.length - 1] = max;
+  return out;
+}
+
+function graphConnected(nodes, roadSegments) {
+  if (!nodes.length) return true;
+  const adj = new Map(nodes.map((n) => [n.id, []]));
+  for (const seg of roadSegments) {
+    if (!seg.enabled) continue;
+    adj.get(seg.a)?.push(seg.b);
+    adj.get(seg.b)?.push(seg.a);
+  }
+  const seen = new Set([nodes[0].id]);
+  const q = [nodes[0].id];
+  while (q.length) {
+    const id = q.shift();
+    for (const next of adj.get(id) || []) if (!seen.has(next)) { seen.add(next); q.push(next); }
+  }
+  return seen.size === nodes.length;
+}
+
+function applyStreetBreaks(rng, nodes, roadSegments, cols, rows, requested = 0) {
+  if (!requested) return 0;
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const degree = (nodeId) => roadSegments.filter((segment) => segment.enabled && (segment.a === nodeId || segment.b === nodeId)).length;
+  const isInteriorIntersection = (id) => {
+    const node = nodesById.get(id);
+    return node && node.c > 0 && node.c < cols && node.r > 0 && node.r < rows;
+  };
+  const candidates = roadSegments.filter((seg) => (
+    // Sólo se quita una cuadra completa entre dos cruces interiores: el vacío
+    // queda entre T claras, nunca como una línea visualmente amputada.
+    isInteriorIntersection(seg.a) && isInteriorIntersection(seg.b)
+  ));
+  const shuffled = rng.shuffle(candidates);
+  let removed = 0;
+  for (const seg of shuffled) {
+    if (removed >= requested) break;
+    const tooCloseToBreak = roadSegments.some((other) => !other.enabled
+      && other.streetKey === seg.streetKey
+      && Math.abs(other.segmentOrdinal - seg.segmentOrdinal) <= 2);
+    if (tooCloseToBreak) continue;
+    if (degree(seg.a) !== 4 || degree(seg.b) !== 4) continue;
+    seg.enabled = false;
+    if (graphConnected(nodes, roadSegments) && degree(seg.a) === 3 && degree(seg.b) === 3) removed += 1;
+    else seg.enabled = true;
+  }
+  return removed;
+}
+
+function validateStreetTopology(map) {
+  const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
+  const degree = (nodeId) => (map.graph.get(nodeId) || []).length;
+  for (const segment of map.roadSegments.filter((segment) => segment.enabled)) {
+    if (Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) < 80) return { valid: false, reason: 'short_road_segment' };
+  }
+  for (const segment of map.roadSegments.filter((segment) => !segment.enabled)) {
+    const a = nodeById.get(segment.a);
+    const b = nodeById.get(segment.b);
+    if (!a || !b || a.c === 0 || a.c === map.cols || a.r === 0 || a.r === map.rows || b.c === 0 || b.c === map.cols || b.r === 0 || b.r === map.rows) return { valid: false, reason: 'edge_break' };
+    if (degree(segment.a) !== 3 || degree(segment.b) !== 3) return { valid: false, reason: 'unclear_break' };
+  }
+  return { valid: true };
+}
+
+function sideSegmentId(block, side) {
+  if (side === 'top') return `RH_${block.c}_${block.r}`;
+  if (side === 'bottom') return `RH_${block.c}_${block.r + 1}`;
+  if (side === 'left') return `RV_${block.c}_${block.r}`;
+  return `RV_${block.c + 1}_${block.r}`;
+}
+
+function sideStreetKey(block, side) {
+  if (side === 'top') return hStreetKey(block.r);
+  if (side === 'bottom') return hStreetKey(block.r + 1);
+  if (side === 'left') return vStreetKey(block.c);
+  return vStreetKey(block.c + 1);
+}
+
+function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, spacingJitter = 0 } = {}) {
+  const x = makeAxis(rng, cols, MARGIN_X, SVG_W - MARGIN_X, spacingJitter);
+  const y = makeAxis(rng, rows, MARGIN_Y, SVG_H - MARGIN_Y, spacingJitter);
+
+  const nodes = [];
+  for (let r = 0; r <= rows; r += 1) {
+    for (let c = 0; c <= cols; c += 1) nodes.push({ id: nodeId(c, r), c, r, x: x[c], y: y[r] });
+  }
+
+  const roadSegments = [];
+  for (let r = 0; r <= rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) roadSegments.push({
+      id: `RH_${c}_${r}`, a: nodeId(c, r), b: nodeId(c + 1, r), x1: x[c], y1: y[r], x2: x[c + 1], y2: y[r],
+      orientation: 'H', streetKey: hStreetKey(r), segmentOrdinal: c, enabled: true,
+    });
+  }
+  for (let c = 0; c <= cols; c += 1) {
+    for (let r = 0; r < rows; r += 1) roadSegments.push({
+      id: `RV_${c}_${r}`, a: nodeId(c, r), b: nodeId(c, r + 1), x1: x[c], y1: y[r], x2: x[c], y2: y[r + 1],
+      orientation: 'V', streetKey: vStreetKey(c), segmentOrdinal: r, enabled: true,
+    });
+  }
+  const removedStreetSegments = applyStreetBreaks(rng, nodes, roadSegments, cols, rows, streetBreaks);
+  const segmentById = new Map(roadSegments.map((s) => [s.id, s]));
+
+  const blocks = [];
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const block = { id: `B${c}_${r}`, c, r, x: x[c], y: y[r], width: x[c + 1] - x[c], height: y[r + 1] - y[r] };
+      block.enabledSides = ['top', 'right', 'bottom', 'left'].filter((side) => segmentById.get(sideSegmentId(block, side))?.enabled);
+      blocks.push(block);
+    }
+  }
+
+  const viableBlocks = blocks.filter((block) => block.enabledSides.length > 0);
+  const selectedBlocks = rng.shuffle(viableBlocks).slice(0, Math.min(houseCount, viableBlocks.length));
+  const houses = selectedBlocks.map((block, i) => {
+    const validLots = [0, 1, 2, 3].filter((lot) => {
+      const east = lot % 2 === 1;
+      const south = lot >= 2;
+      const sides = [south ? 'bottom' : 'top', east ? 'right' : 'left'];
+      return sides.some((side) => segmentById.get(sideSegmentId(block, side))?.enabled);
+    });
+    const lot = rng.pick(validLots);
+    const halfW = block.width / 2;
+    const halfH = block.height / 2;
+    const inset = Math.min(7, halfW * 0.07, halfH * 0.07);
+    const east = lot % 2 === 1;
+    const south = lot >= 2;
+    const rx = block.x + (east ? halfW : 0) + inset;
+    const ry = block.y + (south ? halfH : 0) + inset;
+    const rw = halfW - inset * 2;
+    const rh = halfH - inset * 2;
+    const center = { x: rx + rw / 2, y: ry + rh / 2 };
+
+    const lotSides = [south ? 'bottom' : 'top', east ? 'right' : 'left'];
+    const candidateBorders = lotSides
+      .filter((side) => segmentById.get(sideSegmentId(block, side))?.enabled)
+      .map((side) => ({ side, streetKey: sideStreetKey(block, side) }));
+    const access = rng.pick(candidateBorders);
+
+    let accessNodeId;
+    if (access.side === 'top') accessNodeId = nodeId(east ? block.c + 1 : block.c, block.r);
+    if (access.side === 'bottom') accessNodeId = nodeId(east ? block.c + 1 : block.c, block.r + 1);
+    if (access.side === 'left') accessNodeId = nodeId(block.c, south ? block.r + 1 : block.r);
+    if (access.side === 'right') accessNodeId = nodeId(block.c + 1, south ? block.r + 1 : block.r);
+
+    return {
+      id: `H${i + 1}`, blockId: block.id, lot, rect: { x: rx, y: ry, width: rw, height: rh }, center,
+      accessNodeId, primaryStreetKey: access.streetKey,
+      adjacentStreetKeys: [...new Set(candidateBorders.map((b) => b.streetKey))],
+      asked: false, mark: null, confirmedInnocent: false,
+    };
+  });
+
+  const map = { width: SVG_W, height: SVG_H, cols, rows, x, y, nodes, roadSegments, blocks, houses, removedStreetSegments };
+  map.graph = buildGraph(map);
+  map.topology = validateStreetTopology(map);
+  return map;
+}
+
+function buildGraph(map) {
+  const adj = new Map(map.nodes.map((n) => [n.id, []]));
+  for (const seg of map.roadSegments) {
+    if (!seg.enabled) continue;
+    adj.get(seg.a).push({ node: seg.b, segmentId: seg.id });
+    adj.get(seg.b).push({ node: seg.a, segmentId: seg.id });
+  }
+  return adj;
+}
+
+function graphDistance(map, houseA, houseB) {
+  if (houseA.id === houseB.id) return 0;
+  const start = houseA.accessNodeId;
+  const target = houseB.accessNodeId;
+  const q = [{ id: start, d: 0 }];
+  const seen = new Set([start]);
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.id === target) return cur.d;
+    for (const edge of map.graph.get(cur.id) || []) {
+      if (!seen.has(edge.node)) { seen.add(edge.node); q.push({ id: edge.node, d: cur.d + 1 }); }
+    }
+  }
+  return Infinity;
+}
+
+function getStreetSegments(map, streetKey) { return map.roadSegments.filter((s) => s.enabled && s.streetKey === streetKey); }
+function getHouseById(level, id) { return level.map.houses.find((h) => h.id === id); }
+function candidateTouchesStreet(candidate, streetKey) { return candidate.adjacentStreetKeys.includes(streetKey); }
+function phaseForHour(hour, config) {
+  if (hour >= config.NIGHT_HOUR || hour < 6) return 'night';
+  if (hour >= config.SUNSET_HOUR) return 'sunset';
+  return 'day';
+}
+
+// ---- clues.js ----
+
+const DIRECTION_TEXT = {
+  north: ['Está al norte de mi casa.', 'Buscalo hacia el norte.', 'Vive más al norte que yo.'],
+  south: ['Está al sur de mi casa.', 'Buscalo hacia el sur.', 'Vive más al sur que yo.'],
+  east: ['Está al este de mi casa.', 'Buscalo hacia el este.', 'Vive más al este que yo.'],
+  west: ['Está al oeste de mi casa.', 'Buscalo hacia el oeste.', 'Vive más al oeste que yo.'],
+};
+
+function evalDirection(level, speaker, candidate, direction) {
+  const eps = 0.5;
+  if (direction === 'north') return candidate.center.y < speaker.center.y - eps;
+  if (direction === 'south') return candidate.center.y > speaker.center.y + eps;
+  if (direction === 'east') return candidate.center.x > speaker.center.x + eps;
+  if (direction === 'west') return candidate.center.x < speaker.center.x - eps;
+  return false;
+}
+
+const CLUE_TYPES = {
+  direction: {
+    evaluate(level, clue, candidate) {
+      const speaker = getHouseById(level, clue.speakerId);
+      return evalDirection(level, speaker, candidate, clue.params.direction);
+    },
+  },
+  withinDistance: {
+    evaluate(level, clue, candidate) {
+      const speaker = getHouseById(level, clue.speakerId);
+      return graphDistance(level.map, speaker, candidate) <= clue.params.max;
+    },
+  },
+  fartherThan: {
+    evaluate(level, clue, candidate) {
+      const speaker = getHouseById(level, clue.speakerId);
+      return graphDistance(level.map, speaker, candidate) > clue.params.min;
+    },
+  },
+  onStreet: {
+    evaluate(level, clue, candidate) {
+      return candidateTouchesStreet(candidate, clue.params.streetKey);
+    },
+  },
+  notOnStreet: {
+    evaluate(level, clue, candidate) {
+      return !candidateTouchesStreet(candidate, clue.params.streetKey);
+    },
+  },
+};
+
+function evaluateClue(level, clue, candidateId) {
+  const candidate = getHouseById(level, candidateId);
+  if (!candidate) return false;
+  const type = CLUE_TYPES[clue.type];
+  if (!type) throw new Error(`Tipo de pista desconocido: ${clue.type}`);
+  return Boolean(type.evaluate(level, clue, candidate));
+}
+
+function enumerateClueOptions(level, speakerId) {
+  const speaker = getHouseById(level, speakerId);
+  const options = [];
+
+  for (const direction of ['north', 'south', 'east', 'west']) {
+    DIRECTION_TEXT[direction].forEach((text, variant) => {
+      options.push({
+        type: 'direction', speakerId,
+        params: { direction },
+        text,
+        variant,
+        signature: `direction:${direction}:${variant}`,
+        visual: { kind: 'direction', direction },
+      });
+    });
+  }
+
+  for (const max of [1, 2, 3, 4]) {
+    const texts = [
+      `Está a ${max === 1 ? 'una cuadra' : `${max} cuadras`} o menos de acá.`,
+      `No está a más de ${max === 1 ? 'una cuadra' : `${max} cuadras`}.`,
+    ];
+    texts.forEach((text, variant) => options.push({
+      type: 'withinDistance', speakerId, params: { max }, text, variant,
+      signature: `within:${max}:${variant}`, visual: { kind: 'radius', max },
+    }));
+  }
+
+  for (const min of [1, 2, 3]) {
+    const texts = [
+      `Está a más de ${min === 1 ? 'una cuadra' : `${min} cuadras`} de acá.`,
+      `No lo busques a ${min === 1 ? 'una cuadra' : `${min} cuadras`} o menos.`,
+    ];
+    texts.forEach((text, variant) => options.push({
+      type: 'fartherThan', speakerId, params: { min }, text, variant,
+      signature: `farther:${min}:${variant}`, visual: { kind: 'radius', min },
+    }));
+  }
+
+  for (const streetKey of speaker.adjacentStreetKeys) {
+    [
+      'Está sobre esta calle.',
+      'Vive junto a esta calle.',
+      'Su lote mira a esta calle.',
+      'Buscalo sobre este tramo.',
+    ].forEach((text, variant) => options.push({
+      type: 'onStreet', speakerId, params: { streetKey }, text, variant,
+      signature: `onStreet:${streetKey}:${variant}`,
+      visual: { kind: 'street', streetKeys: [streetKey] },
+    }));
+    [
+      'No vive sobre esta calle.',
+      'Su lote no mira a esta calle.',
+      'No está junto a este tramo.',
+      'No lo busques sobre esta calle.',
+    ].forEach((text, variant) => options.push({
+      type: 'notOnStreet', speakerId, params: { streetKey }, text, variant,
+      signature: `notOnStreet:${streetKey}:${variant}`,
+      visual: { kind: 'street', streetKeys: [streetKey] },
+    }));
+  }
+
+  return options;
+}
+
+function cloneClue(clue) {
+  return {
+    type: clue.type,
+    speakerId: clue.speakerId,
+    params: { ...clue.params },
+    text: clue.text,
+    variant: clue.variant ?? 0,
+    signature: clue.signature,
+    visual: clue.visual ? JSON.parse(JSON.stringify(clue.visual)) : null,
+  };
+}
+
+// ---- solver.js ----
+
+function isCandidateConsistent(level, candidateId, observations) {
+  for (const observation of observations) {
+    const result = evaluateClue(level, observation.clue, candidateId);
+    const speakerIsCandidate = observation.houseId === candidateId;
+    if (speakerIsCandidate && result !== false) return false;
+    if (!speakerIsCandidate && result !== true) return false;
+  }
+  return true;
+}
+
+function getConsistentCandidates(level, observations) {
+  return level.map.houses
+    .filter((h) => isCandidateConsistent(level, h.id, observations))
+    .map((h) => h.id);
+}
+
+function isUniqueSolution(level, observations, expectedId = null) {
+  const candidates = getConsistentCandidates(level, observations);
+  return candidates.length === 1 && (expectedId == null || candidates[0] === expectedId);
+}
+
+function combinations(items, k, start = 0, prefix = [], out = []) {
+  if (prefix.length === k) { out.push([...prefix]); return out; }
+  for (let i = start; i <= items.length - (k - prefix.length); i += 1) {
+    prefix.push(items[i]);
+    combinations(items, k, i + 1, prefix, out);
+    prefix.pop();
+  }
+  return out;
+}
+
+function findMinimumSolvingSubsets(level) {
+  const allObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+  for (let k = 1; k <= allObs.length; k += 1) {
+    const subsets = combinations(allObs, k);
+    const solving = subsets.filter((subset) => isUniqueSolution(level, subset, level.murdererId));
+    if (solving.length) return { minimum: k, subsets: solving };
+  }
+  return { minimum: Infinity, subsets: [] };
+}
+
+function calculateInformationGain(level, observations, houseId) {
+  const before = getConsistentCandidates(level, observations);
+  const house = level.map.houses.find((h) => h.id === houseId);
+  if (!house || observations.some((o) => o.houseId === houseId)) return { before: before.length, after: before.length, gain: 0, ratio: 0 };
+  const afterObs = [...observations, { houseId, clue: house.clue }];
+  const after = getConsistentCandidates(level, afterObs);
+  const gain = Math.max(0, before.length - after.length);
+  return { before: before.length, after: after.length, gain, ratio: before.length ? gain / before.length : 0 };
+}
+
+function calculateDifficulty(level) {
+  const fullObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+  const minimum = findMinimumSolvingSubsets(level);
+  const singletonCounts = level.map.houses.map((h) => getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]).length);
+  const reductions = singletonCounts.map((n) => level.map.houses.length - n);
+  const avgReduction = reductions.reduce((a, b) => a + b, 0) / reductions.length;
+  const signatures = new Map();
+  for (const h of level.map.houses) {
+    const candidates = getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]).join(',');
+    signatures.set(candidates, (signatures.get(candidates) || 0) + 1);
+  }
+  const redundancyPairs = [...signatures.values()].reduce((sum, n) => sum + Math.max(0, n - 1), 0);
+  const standaloneCandidatesByHouse = Object.fromEntries(level.map.houses.map((h) => [
+    h.id,
+    getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]),
+  ]));
+  const minimumSolvingHouseSets = minimum.subsets.map((subset) => subset.map((observation) => observation.houseId));
+  return {
+    houseCount: level.map.houses.length,
+    initialCandidates: level.map.houses.length,
+    finalCandidates: getConsistentCandidates(level, fullObs).length,
+    minimumQuestions: minimum.minimum,
+    minimumSolvingSets: minimum.subsets.length,
+    minimumSolvingHouseSets,
+    averageCandidateReduction: Number(avgReduction.toFixed(2)),
+    redundancyScore: redundancyPairs,
+    standaloneCandidatesByHouse,
+    singleClueUniqueCount: Object.values(standaloneCandidatesByHouse).filter((ids) => ids.length === 1).length,
+    informationByHouse: Object.fromEntries(level.map.houses.map((h) => [h.id, level.map.houses.length - standaloneCandidatesByHouse[h.id].length])),
+  };
+}
+
+function bestHintHouse(level, observations, currentHour = null) {
+  const asked = new Set(observations.map((o) => o.houseId));
+  const eligible = level.map.houses.filter((h) => {
+    if (asked.has(h.id)) return false;
+    if (currentHour == null || !level.timed) return true;
+    return currentHour < h.availableUntil;
+  });
+  let best = null;
+  for (const house of eligible) {
+    const info = calculateInformationGain(level, observations, house.id);
+    if (!best || info.gain > best.info.gain || (info.gain === best.info.gain && info.after < best.info.after)) best = { houseId: house.id, info };
+  }
+  return best;
+}
+
+// ---- generator.js ----
+
+function getLevelProfile(levelNumber = 1) {
+  const n = Math.max(1, Math.floor(Number(levelNumber) || 1));
+  if (n === 1) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 2, maxQuestions: 4, clueCandidateFraction: 0.50, streetBreaks: 0, spacingJitter: 0 };
+  if (n === 2) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 4, clueCandidateFraction: 0.55, streetBreaks: 0, spacingJitter: 0.04 };
+  if (n === 3) return { levelNumber: n, houseCount: 9, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.57, streetBreaks: 1, spacingJitter: 0.08 };
+  if (n === 4) return { levelNumber: n, houseCount: 10, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.60, streetBreaks: 1, spacingJitter: 0.12 };
+  if (n === 5) return { levelNumber: n, houseCount: 10, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.62, streetBreaks: 2, spacingJitter: 0.15 };
+  if (n === 6) return { levelNumber: n, houseCount: 11, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.64, streetBreaks: 2, spacingJitter: 0.18 };
+  if (n === 7) return { levelNumber: n, houseCount: 12, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.66, streetBreaks: 3, spacingJitter: 0.20 };
+  if (n === 8) return { levelNumber: n, houseCount: 12, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.67, streetBreaks: 3, spacingJitter: 0.22 };
+  if (n === 9) return { levelNumber: n, houseCount: 13, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.68, streetBreaks: 4, spacingJitter: 0.24 };
+  const houseCount = Math.min(16, 13 + Math.floor((n - 9) / 2));
+  const cols = n >= 12 ? 6 : 5;
+  const streetBreaks = Math.min(7, 4 + Math.floor((n - 9) / 2));
+  return { levelNumber: n, houseCount, cols, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.69, streetBreaks, spacingJitter: Math.min(0.34, 0.24 + (n - 9) * 0.012) };
+}
+
+function singleObservationCandidates(level, speakerId, clue) {
+  return getConsistentCandidates(level, [{ houseId: speakerId, clue }]);
+}
+
+function clueFamily(clue) {
+  if (clue.type === 'withinDistance' || clue.type === 'fartherThan') return 'distance';
+  if (clue.type === 'direction') return 'direction';
+  return 'street';
+}
+
+function maxCluesForFamily(level, family) {
+  if (family === 'distance') {
+    return level.map.houses.length <= 10
+      ? CONFIG.DISTANCE_CLUE_MAX_SMALL_LEVEL
+      : CONFIG.DISTANCE_CLUE_MAX_LARGE_LEVEL;
+  }
+  // Evita que una sola clase monopolice una seed, aun cuando sea la más común.
+  return Math.ceil(level.map.houses.length * 0.6);
+}
+
+function weightedPick(rng, options) {
+  const total = options.reduce((sum, option) => sum + option.weight, 0);
+  let cursor = rng() * total;
+  for (const option of options) {
+    cursor -= option.weight;
+    if (cursor <= 0) return option;
+  }
+  return options[options.length - 1];
+}
+
+function chooseClues(level, rng) {
+  const usedTexts = new Set();
+  const usedLogic = new Set();
+  const familyCounts = { direction: 0, street: 0, distance: 0 };
+  const houses = rng.shuffle(level.map.houses);
+
+  for (const house of houses) {
+    const shouldBeTrue = house.id !== level.murdererId;
+    let options = enumerateClueOptions(level, house.id)
+      .filter((clue) => evaluateClue(level, clue, level.murdererId) === shouldBeTrue)
+      .map((clue) => ({ clue, candidates: singleObservationCandidates(level, house.id, clue) }))
+      .filter(({ candidates }) => candidates.includes(level.murdererId))
+      .filter(({ candidates }) => candidates.length >= CONFIG.MIN_STANDALONE_CANDIDATES && candidates.length < level.map.houses.length);
+
+    const target = level.map.houses.length * (level.profile.clueCandidateFraction || 0.5);
+    const eligible = [];
+    for (const option of options) {
+      const logicKey = `${option.clue.type}|${JSON.stringify(option.clue.params)}`;
+      if (usedTexts.has(option.clue.text)) continue;
+      const family = clueFamily(option.clue);
+      if (familyCounts[family] >= maxCluesForFamily(level, family)) continue;
+
+      // Mantiene el valor lógico de la pista como primer criterio, pero sortea
+      // entre opciones de calidad comparable con un peso por familia. Distancia
+      // queda fuertemente relegada frente a direcciones y relaciones con calles.
+      const quality = Math.abs(option.candidates.length - target);
+      const familyWeight = CONFIG.CLUE_FAMILY_WEIGHTS[family] || 1;
+      const repetitionPenalty = 1 + familyCounts[family] * 0.45;
+      eligible.push({
+        ...option,
+        family,
+        // Repetir una relación sigue siendo posible (la redundancia es válida),
+        // pero con una penalización clara en lugar de bloquear la generación.
+        weight: (familyWeight / repetitionPenalty) * Math.exp(-quality * 1.15) * (usedLogic.has(logicKey) ? 0.35 : 1),
+      });
+    }
+    if (!eligible.length) return false;
+    const picked = weightedPick(rng, eligible);
+    house.clue = cloneClue(picked.clue);
+    familyCounts[picked.family] += 1;
+    usedTexts.add(picked.clue.text);
+    usedLogic.add(`${picked.clue.type}|${JSON.stringify(picked.clue.params)}`);
+  }
+  level.clueFamilyCounts = { ...familyCounts };
+  return true;
+}
+
+function assignSchedules(level, rng) {
+  level.startHour = CONFIG.START_HOUR;
+  const shuffled = rng.shuffle(level.map.houses);
+  shuffled.forEach((house, i) => {
+    if (!level.timed) house.availableUntil = 99;
+    else if (i < 2) house.availableUntil = 24;
+    else house.availableUntil = rng.pick([20, 21, 22, 24]);
+  });
+}
+
+function timedStrategyExists(level) {
+  if (!level.timed) return true;
+  const n = level.map.houses.length;
+  if (n > 20) return true;
+  const memo = new Map();
+
+  function dfs(mask, hour, observations) {
+    const candidates = getConsistentCandidates(level, observations);
+    if (candidates.length === 1 && candidates[0] === level.murdererId) return true;
+    const key = `${mask}|${hour}`;
+    if (memo.has(key)) return memo.get(key);
+
+    for (let i = 0; i < n; i += 1) {
+      if (mask & (1 << i)) continue;
+      const house = level.map.houses[i];
+      if (hour >= house.availableUntil) continue;
+      const nextObs = [...observations, { houseId: house.id, clue: house.clue }];
+      if (dfs(mask | (1 << i), hour + 1, nextObs)) { memo.set(key, true); return true; }
+    }
+    memo.set(key, false);
+    return false;
+  }
+  return dfs(0, level.startHour, []);
+}
+
+function validateLevel(level) {
+  const topology = validateStreetTopology(level.map);
+  if (!topology.valid) return { valid: false, reason: topology.reason };
+  const observations = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+  if (!isUniqueSolution(level, observations, level.murdererId)) return { valid: false, reason: 'ambiguous' };
+  for (const house of level.map.houses) {
+    const truth = evaluateClue(level, house.clue, level.murdererId);
+    if (house.id === level.murdererId && truth) return { valid: false, reason: 'murderer_truth' };
+    if (house.id !== level.murdererId && !truth) return { valid: false, reason: 'innocent_lie' };
+    const singleton = singleObservationCandidates(level, house.id, house.clue);
+    if (singleton.length === level.map.houses.length) return { valid: false, reason: 'empty_clue' };
+    if (singleton.length < CONFIG.MIN_STANDALONE_CANDIDATES) return { valid: false, reason: 'single_clue_unique' };
+  }
+  const texts = level.map.houses.map((h) => h.clue.text);
+  if (new Set(texts).size !== texts.length) return { valid: false, reason: 'duplicate_text' };
+  const distanceClues = level.map.houses.filter((h) => clueFamily(h.clue) === 'distance').length;
+  if (distanceClues > maxCluesForFamily(level, 'distance')) return { valid: false, reason: 'distance_overrepresented' };
+  const min = findMinimumSolvingSubsets(level).minimum;
+  if (!Number.isFinite(min)) return { valid: false, reason: 'unsolved' };
+  if (min < level.profile.minQuestions || min > level.profile.maxQuestions) return { valid: false, reason: 'difficulty' };
+  if (!timedStrategyExists(level)) return { valid: false, reason: 'timed_impossible' };
+  return { valid: true };
+}
+
+function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
+  const profile = getLevelProfile(levelNumber);
+  const rng = createRng(`${seed}|level:${profile.levelNumber}`);
+  let lastReason = 'unknown';
+  for (let attempt = 0; attempt < CONFIG.GENERATION_ATTEMPTS; attempt += 1) {
+    const level = {
+      seed: String(seed),
+      levelNumber: profile.levelNumber,
+      profile,
+      timed,
+      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, spacingJitter: profile.spacingJitter }),
+      murdererId: null,
+      startHour: CONFIG.START_HOUR,
+      generationAttempt: attempt + 1,
+    };
+    level.murdererId = rng.pick(level.map.houses).id;
+    assignSchedules(level, rng);
+    if (!chooseClues(level, rng)) { lastReason = 'clue_generation'; continue; }
+    const verdict = validateLevel(level);
+    if (!verdict.valid) { lastReason = verdict.reason; continue; }
+  level.metrics = calculateDifficulty(level);
+    level.metrics.clueFamilyCounts = { ...level.clueFamilyCounts };
+    return level;
+  }
+  throw new Error(`No se pudo generar un nivel válido para seed ${seed}, nivel ${profile.levelNumber}. Último motivo: ${lastReason}`);
+}
+
+function validateGeneratedLevel(level) {
+  return validateLevel(level);
+}
+
+function batchValidate(count = 100, { timed = false, prefix = 'batch', levelNumber = 1 } = {}) {
+  const failures = [];
+  const reasons = {};
+  let valid = 0;
+  for (let i = 0; i < count; i += 1) {
+    const seed = `${prefix}-${i}`;
+    try {
+      const level = generateLevel(seed, { timed, levelNumber });
+      const verdict = validateLevel(level);
+      if (verdict.valid) valid += 1;
+      else {
+        failures.push(seed);
+        reasons[verdict.reason] = (reasons[verdict.reason] || 0) + 1;
+      }
+    } catch (error) {
+      failures.push(seed);
+      const key = 'generation_error';
+      reasons[key] = (reasons[key] || 0) + 1;
+    }
+  }
+  return { generated: count, valid, invalid: count - valid, failures, reasons };
+}
+
+// ---- game.js ----
+
+function safeGetTheme() {
+  try {
+    const saved = localStorage.getItem('vecindario-theme');
+    return saved === 'night' ? 'night' : 'day';
+  } catch (_) {
+    return 'day';
+  }
+}
+
+function safeSaveTheme(theme) {
+  try { localStorage.setItem('vecindario-theme', theme); } catch (_) { /* file:// can block storage */ }
+}
+
+class Game {
+  constructor({ seed, timed = false, debug = false, levelNumber = 1 } = {}) {
+    this.seed = seed || randomSeed();
+    this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
+    this.timed = timed;
+    this.debug = debug;
+    this.pendingMode = 'normal';
+    this.mode = 'normal';
+    this.theme = safeGetTheme();
+    this.lastOutcomeWon = false;
+    this.audio = new AudioManager();
+    this.ui = new UI(this);
+    this.ui.bind();
+    this.loadLevel(this.seed, { timed, levelNumber: this.levelNumber });
+  }
+
+  get selectedHouse() { return this.level?.map.houses.find((h) => h.id === this.selectedHouseId) || null; }
+
+  loadLevel(seed, { timed = false, levelNumber = this.levelNumber } = {}) {
+    this.seed = seed;
+    this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
+    this.timed = timed;
+    this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
+    this.score = CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
+    this.lives = CONFIG.STARTING_LIVES;
+    this.currentHour = this.level.startHour;
+    this.observations = [];
+    this.selectedHouseId = null;
+    this.pendingAccusationId = null;
+    this.hintUsed = false;
+    this.finished = false;
+    this.revealedMurderer = false;
+    this.lastOutcomeWon = false;
+    this.ui.hideEnd();
+    this.ui.renderMap(this.level);
+    this.ui.setPrompt(`Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+    this.ui.refresh();
+  }
+
+  start(mode = 'normal') {
+    this.mode = mode;
+    this.ui.hideStartModal();
+    this.ui.setPrompt(mode === 'assist'
+      ? `Nivel ${this.levelNumber}. Seleccioná una casa. Las hipótesis imposibles se apagarán con cada testimonio.`
+      : `Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+    this.ui.refresh();
+  }
+
+  selectHouse(id) {
+    if (this.finished) return;
+    this.audio.select();
+    this.selectedHouseId = id;
+    const h = this.selectedHouse;
+    if (h.asked) {
+      this.ui.setPrompt('Este vecino ya habló.', h.clue.text);
+      this.ui.highlightClue(h.clue);
+    } else if (this.level.timed && this.currentHour >= h.availableUntil) this.ui.setPrompt('Esta casa ya no responde.');
+    else this.ui.setPrompt('Elegí qué hacer con esta casa.');
+    this.ui.refresh();
+  }
+
+  async interrogateSelected() {
+    const h = this.selectedHouse;
+    if (!h || h.asked || this.finished) return;
+    if (this.level.timed && this.currentHour >= h.availableUntil) return;
+    const beforePhase = phaseForHour(this.currentHour, CONFIG);
+    h.asked = true;
+    this.observations.push({ houseId: h.id, clue: h.clue });
+    this.score -= CONFIG.INTERROGATION_COST;
+    this.audio.interrogate();
+    this.ui.setPrompt('El vecino responde:', h.clue.text);
+    this.ui.highlightClue(h.clue);
+    if (this.level.timed) this.currentHour += 1;
+    const afterPhase = phaseForHour(this.currentHour, CONFIG);
+    this.ui.refresh();
+    if (this.level.timed && beforePhase !== 'night' && afterPhase === 'night') {
+      this.audio.night();
+      await this.ui.showNightTransition();
+      this.ui.refresh();
+    }
+  }
+
+  toggleMark(mark) {
+    const h = this.selectedHouse;
+    if (!h || this.finished) return;
+    if (h.confirmedInnocent && mark === 'suspect') return;
+    h.mark = h.mark === mark ? null : mark;
+    this.audio.mark();
+    this.ui.refresh();
+  }
+
+  prepareAccusation() {
+    const h = this.selectedHouse;
+    if (!h || this.finished || h.confirmedInnocent) return;
+    this.pendingAccusationId = h.id;
+    this.ui.showAccuseModal(true);
+    this.ui.refresh();
+  }
+
+  cancelAccusation() {
+    this.pendingAccusationId = null;
+    this.ui.showAccuseModal(false);
+    this.ui.refresh();
+  }
+
+  async confirmAccusation() {
+    const id = this.pendingAccusationId;
+    if (!id || this.finished) return;
+    this.ui.showAccuseModal(false);
+    this.pendingAccusationId = null;
+    if (id === this.level.murdererId) {
+      this.finished = true;
+      this.revealedMurderer = true;
+      this.lastOutcomeWon = true;
+      this.audio.solve();
+      this.ui.setPrompt('La lógica cerró. El asesino quedó identificado.');
+      this.ui.refresh();
+      await this.ui.playResolution();
+      setTimeout(() => this.ui.showEnd({ won: true, score: this.score, questions: this.observations.length, lives: this.lives }), 280);
+      return;
+    }
+    const house = this.level.map.houses.find((h) => h.id === id);
+    house.confirmedInnocent = true;
+    house.mark = 'cleared';
+    this.lives -= 1;
+    this.score -= CONFIG.WRONG_ACCUSATION_COST;
+    this.audio.wrong();
+    if (this.lives <= 0) {
+      this.finished = true;
+      this.revealedMurderer = true;
+      this.lastOutcomeWon = false;
+      this.ui.setPrompt('Se acabaron las vidas. El barrio revela la casa correcta.');
+      this.ui.refresh();
+      setTimeout(() => this.ui.showEnd({ won: false, score: this.score, questions: this.observations.length, lives: 0 }), 450);
+    } else {
+      this.ui.setPrompt('No era esa casa. Quedó descartada.');
+      this.ui.refresh();
+    }
+  }
+
+  useHint() {
+    if (this.hintUsed || this.finished) return;
+    const hint = bestHintHouse(this.level, this.observations, this.level.timed ? this.currentHour : null);
+    if (!hint) {
+      this.ui.setPrompt('No queda ninguna casa disponible para sugerir.');
+      return;
+    }
+    this.hintUsed = true;
+    this.score -= CONFIG.HINT_COST;
+    this.selectedHouseId = hint.houseId;
+    this.ui.setPrompt('Quizás convenga hablar con este vecino.');
+    this.ui.pulseHint(hint.houseId);
+    this.ui.refresh();
+  }
+
+  toggleSound() { this.audio.toggle(); this.ui.refresh(); }
+
+  toggleTheme() {
+    if (this.level?.timed) return;
+    this.theme = this.theme === 'night' ? 'day' : 'night';
+    safeSaveTheme(this.theme);
+    this.ui.refresh();
+  }
+
+  retry() {
+    const mode = this.mode;
+    this.loadLevel(this.seed, { timed: this.timed, levelNumber: this.levelNumber });
+    this.mode = mode;
+    this.ui.hideStartModal();
+    this.ui.refresh();
+  }
+
+  updateUrl(seed = this.seed, levelNumber = this.levelNumber, timed = this.timed) {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('seed', seed);
+      url.searchParams.set('level', String(levelNumber));
+      if (timed) url.searchParams.set('timed', '1'); else url.searchParams.delete('timed');
+      history.replaceState({}, '', url);
+    } catch (_) { /* file:// may restrict history in some browsers */ }
+  }
+
+  newGame() {
+    const mode = this.mode;
+    const next = randomSeed();
+    this.updateUrl(next, this.levelNumber, this.timed);
+    this.loadLevel(next, { timed: this.timed, levelNumber: this.levelNumber });
+    this.mode = mode;
+    this.ui.hideStartModal();
+    this.ui.refresh();
+  }
+
+  nextLevel() {
+    const mode = this.mode;
+    const nextLevelNumber = this.levelNumber + 1;
+    const nextSeed = randomSeed();
+    this.updateUrl(nextSeed, nextLevelNumber, false);
+    this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
+    this.mode = mode;
+    this.ui.hideStartModal();
+    this.ui.setPrompt(`Nivel ${nextLevelNumber}. El barrio es un poco más exigente.`);
+    this.ui.refresh();
+  }
+
+  advanceOrNew() {
+    if (this.lastOutcomeWon) this.nextLevel();
+    else this.newGame();
+  }
+
+  runBatchDebug() {
+    this.ui.el.debugBatchOutput.textContent = 'Validando…';
+    setTimeout(() => {
+      const tests = runInternalTests();
+      const result = batchValidate(100, { timed: false, prefix: `debug-${this.seed}`, levelNumber: this.levelNumber });
+      const failedTests = tests.results.filter((t) => !t.ok);
+      this.ui.el.debugBatchOutput.textContent = [
+        `self-tests: ${tests.passed}/${tests.total} passed`,
+        ...failedTests.map((t) => `FAIL ${t.name}${t.error ? `: ${t.error}` : ''}`),
+        '',
+        `level: ${this.levelNumber}`,
+        `${result.generated} generated`,
+        `${result.valid} valid`,
+        `${result.invalid} invalid`,
+        result.failures.length ? `failed seeds: ${result.failures.join(', ')}` : '0 ambiguous / impossible',
+        Object.keys(result.reasons).length ? `reasons: ${JSON.stringify(result.reasons)}` : '',
+      ].filter((x) => x !== '').join('\n');
+    }, 20);
+  }
+
+  loadTimedDemo() {
+    const seed = 'night-demo';
+    this.updateUrl(seed, Math.max(1, this.levelNumber), true);
+    this.loadLevel(seed, { timed: true, levelNumber: Math.max(1, this.levelNumber) });
+    this.mode = 'assist';
+    this.ui.hideStartModal();
+    this.ui.setPrompt('Demo temporal: cada interrogatorio consume una hora.');
+    this.ui.refresh();
+  }
+}
+
+// ---- audio.js ----
+const STORAGE_KEY = 'vecindario:sound';
+
+function safeStorageGet(key) {
+  try { return window.localStorage?.getItem(key) ?? null; }
+  catch { return null; }
+}
+
+function safeStorageSet(key, value) {
+  try { window.localStorage?.setItem(key, value); }
+  catch { /* El juego también debe funcionar en file:// o previews con storage bloqueado. */ }
+}
+
+class AudioManager {
+  constructor() {
+    this.enabled = safeStorageGet(STORAGE_KEY) !== 'off';
+    this.ctx = null;
+  }
+  setEnabled(value) {
+    this.enabled = Boolean(value);
+    safeStorageSet(STORAGE_KEY, this.enabled ? 'on' : 'off');
+  }
+  toggle() { this.setEnabled(!this.enabled); return this.enabled; }
+  ensure() {
+    if (!this.enabled) return null;
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return this.ctx;
+  }
+  tone(freq = 420, duration = 0.045, gain = 0.025, type = 'sine') {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(gain, ctx.currentTime + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    osc.connect(g).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration + 0.015);
+  }
+  select() { this.tone(370, .04, .018); }
+  interrogate() { this.tone(520, .065, .024); }
+  mark() { this.tone(310, .04, .018, 'triangle'); }
+  wrong() { this.tone(155, .16, .035, 'sawtooth'); }
+  solve() { this.tone(520, .08, .025); setTimeout(() => this.tone(660, .1, .025), 85); }
+  night() { this.tone(220, .18, .018, 'triangle'); }
+}
+
+// ---- ui.js ----
+
+const NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+class UI {
+  constructor(game) {
+    this.game = game;
+    this.el = Object.fromEntries([
+      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
+      'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
+      'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose'
+    ].map((id) => [id, document.getElementById(id)]));
+    this.streetHighlightEls = [];
+    this.blockHighlightEls = [];
+    this.syncModalLock();
+  }
+
+  syncModalLock() {
+    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal].some((el) => el && !el.hidden);
+    document.body.classList.toggle('modal-open', anyOpen);
+  }
+
+  hideStartModal() {
+    this.el.startModal.hidden = true;
+    this.syncModalLock();
+  }
+
+  showStartModal() {
+    this.el.startModal.hidden = false;
+    this.syncModalLock();
+  }
+
+  bind() {
+    document.querySelectorAll('.mode-option').forEach((btn) => btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-option').forEach((b) => b.classList.toggle('is-selected', b === btn));
+      this.game.pendingMode = btn.dataset.mode;
+    }));
+    this.el.startBtn.addEventListener('click', () => this.game.start(this.game.pendingMode));
+    this.el.interrogateBtn.addEventListener('click', () => this.game.interrogateSelected());
+    this.el.suspectBtn.addEventListener('click', () => this.game.toggleMark('suspect'));
+    this.el.clearBtn.addEventListener('click', () => this.game.toggleMark('cleared'));
+    this.el.accuseBtn.addEventListener('click', () => this.game.prepareAccusation());
+    this.el.cancelAccuseBtn.addEventListener('click', () => this.game.cancelAccusation());
+    this.el.confirmAccuseBtn.addEventListener('click', () => this.game.confirmAccusation());
+    this.el.hintBtn.addEventListener('click', () => this.game.useHint());
+    this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
+    this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
+    this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
+    this.el.retryBtn.addEventListener('click', () => this.game.retry());
+    this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
+    this.el.debug100.addEventListener('click', () => this.game.runBatchDebug());
+    this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
+    this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
+
+    this.el.board.addEventListener('pointerup', (e) => {
+      const house = e.target.closest?.('.house');
+      if (!house) return;
+      e.preventDefault();
+      this.game.selectHouse(house.dataset.houseId);
+    });
+  }
+
+  toggleLogicPanel(force = null) {
+    const shouldOpen = force == null ? this.el.debugPanel.hidden : Boolean(force);
+    this.el.debugPanel.hidden = !shouldOpen;
+    this.el.logicToggle.setAttribute('aria-expanded', String(shouldOpen));
+    this.el.logicToggle.classList.toggle('is-active', shouldOpen);
+    if (shouldOpen) this.updateDebug();
+  }
+
+  renderMap(level) {
+    const svg = this.el.board;
+    svg.innerHTML = '';
+    svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
+
+    const lotsGroup = svgEl('g', { 'aria-hidden': 'true' });
+    for (const b of level.map.blocks) {
+      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: b.x + b.width / 2, y1: b.y + 5, x2: b.x + b.width / 2, y2: b.y + b.height - 5 }));
+      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: b.x + 5, y1: b.y + b.height / 2, x2: b.x + b.width - 5, y2: b.y + b.height / 2 }));
+    }
+    svg.appendChild(lotsGroup);
+
+    const roadsGroup = svgEl('g', { 'aria-hidden': 'true' });
+    for (const s of level.map.roadSegments.filter((x) => x.enabled)) {
+      roadsGroup.appendChild(svgEl('line', { class: 'road', 'data-street': s.streetKey, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
+    }
+    svg.appendChild(roadsGroup);
+
+    const housesGroup = svgEl('g', { id: 'housesGroup' });
+    for (const h of level.map.houses) {
+      const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': 'Casa' });
+      const r = svgEl('rect', { class: 'house-shape', x: h.rect.x, y: h.rect.y, width: h.rect.width, height: h.rect.height, rx: 2 });
+      g.appendChild(r);
+
+      const toneHeight = Math.max(6, Math.min(10, h.rect.height * 0.1));
+      const tone = svgEl('rect', {
+        class: 'house-asked-tone',
+        x: h.rect.x + 5,
+        y: h.rect.y + h.rect.height - toneHeight - 5,
+        width: Math.max(4, h.rect.width - 10),
+        height: toneHeight,
+        rx: 2,
+      });
+      g.appendChild(tone);
+
+      const sleep = svgEl('text', { class: 'house-sleep-mark', x: h.rect.x + h.rect.width / 2, y: h.rect.y + h.rect.height / 2 + 5, 'text-anchor': 'middle', 'font-size': 20, 'font-weight': 800 });
+      sleep.textContent = 'Z';
+      sleep.style.display = 'none';
+      g.appendChild(sleep);
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.game.selectHouse(h.id); } });
+      housesGroup.appendChild(g);
+    }
+    svg.appendChild(housesGroup);
+  }
+
+  getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
+
+  refresh() {
+    const g = this.game;
+    this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString('es-AR');
+    this.el.livesValue.textContent = Array.from({ length: CONFIG.STARTING_LIVES }, (_, i) => i < g.lives ? '●' : '○').join(' ');
+    this.el.levelValue.textContent = String(g.levelNumber);
+    this.el.seedLabel.textContent = g.level ? `seed ${g.level.seed}` : '';
+    this.el.modeBadge.textContent = g.mode === 'assist' ? 'ASISTENCIA' : 'LÓGICA PURA';
+    this.el.soundToggle.setAttribute('aria-pressed', String(g.audio.enabled));
+    this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
+    if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = `NIVEL ${g.levelNumber} · UN ASESINO. UN MENTIROSO.`;
+
+    if (g.level?.timed) {
+      this.el.timeStatus.classList.add('is-timed');
+      this.el.timeStatus.setAttribute('aria-label', 'Hora de la investigación');
+      this.el.timeStatus.disabled = true;
+      this.el.timeStatus.querySelector('.status-kicker').textContent = 'HORA';
+      this.el.timeValue.textContent = `${String(g.currentHour).padStart(2, '0')}:00`;
+      this.el.app.dataset.phase = phaseForHour(g.currentHour, CONFIG);
+    } else {
+      this.el.timeStatus.classList.remove('is-timed');
+      this.el.timeStatus.disabled = false;
+      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? 'Cambiar a modo claro' : 'Cambiar a modo nocturno');
+      this.el.timeStatus.querySelector('.status-kicker').textContent = 'AMBIENTE';
+      this.el.timeValue.textContent = g.theme === 'night' ? '☾ NOCHE' : '☼ CLARO';
+      this.el.app.dataset.phase = g.theme;
+    }
+
+    const candidates = g.level ? getConsistentCandidates(g.level, g.observations) : [];
+    for (const house of g.level?.map.houses || []) {
+      const el = this.getHouseEl(house.id);
+      if (!el) continue;
+      el.classList.toggle('asked', house.asked && !house.mark);
+      el.classList.toggle('was-asked', house.asked);
+      el.classList.toggle('suspect', house.mark === 'suspect');
+      el.classList.toggle('cleared', house.mark === 'cleared' || house.confirmedInnocent);
+      el.classList.toggle('selected', g.selectedHouseId === house.id);
+      el.classList.toggle('pending-accuse', g.pendingAccusationId === house.id);
+      el.classList.toggle('murderer', g.revealedMurderer && house.id === g.level.murdererId);
+      el.classList.toggle('incompatible', g.mode === 'assist' && g.observations.length > 0 && !candidates.includes(house.id));
+      const unavailable = g.level.timed && g.currentHour >= house.availableUntil && !house.asked;
+      el.classList.toggle('unavailable', unavailable);
+      const sleep = el.querySelector('.house-sleep-mark');
+      if (sleep) sleep.style.display = unavailable ? '' : 'none';
+    }
+
+    const selected = g.selectedHouse;
+    const has = Boolean(selected);
+    const unavailable = has && g.level.timed && g.currentHour >= selected.availableUntil && !selected.asked;
+    this.el.selectedState.textContent = !has ? 'NINGUNA' : unavailable ? 'NO DISPONIBLE' : selected.asked ? 'INTERROGADA' : selected.mark === 'suspect' ? 'SOSPECHOSA' : selected.mark === 'cleared' ? 'DESCARTADA' : 'SELECCIONADA';
+    this.el.interrogateBtn.disabled = !has || selected.asked || unavailable || g.finished;
+    this.el.suspectBtn.disabled = !has || g.finished || selected.confirmedInnocent;
+    this.el.clearBtn.disabled = !has || g.finished;
+    this.el.accuseBtn.disabled = !has || g.finished || selected.confirmedInnocent;
+    this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? 'Quitar sospecha' : 'Marcar sospechoso';
+    this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? 'Quitar descarte' : 'Descartar';
+    this.el.hintBtn.disabled = g.hintUsed || g.finished;
+
+    this.updateDebug();
+  }
+
+  setPrompt(text, testimony = null) {
+    this.el.casePrompt.textContent = text;
+    if (testimony) {
+      this.el.testimony.hidden = false;
+      this.el.testimony.textContent = `“${testimony}”`;
+    } else {
+      this.el.testimony.hidden = true;
+      this.el.testimony.textContent = '';
+    }
+  }
+
+  highlightClue(clue) {
+    this.clearClueHighlight();
+
+    if (clue.visual?.kind === 'street') {
+      for (const key of clue.visual.streetKeys || []) {
+        if (!getStreetSegments(this.game.level.map, key).length) continue;
+        const lines = this.el.board.querySelectorAll(`.road[data-street="${key}"]`);
+        for (const line of lines) {
+          line.dataset.oldStroke = line.style.stroke || '';
+          line.style.stroke = '#4b83ff';
+          line.style.strokeWidth = '13';
+          this.streetHighlightEls.push(line);
+        }
+      }
+      setTimeout(() => this.clearClueHighlight(), 1800);
+      return;
+    }
+
+    // Para pistas de distancia corta, mostrar brevemente las manzanas que
+    // contienen hipótesis compatibles con la distancia real del grafo.
+    if (clue.type === 'withinDistance') {
+      const qualifyingBlocks = new Set(
+        this.game.level.map.houses
+          .filter((house) => evaluateClue(this.game.level, clue, house.id))
+          .map((house) => house.blockId)
+      );
+
+      const housesGroup = this.el.board.querySelector('#housesGroup');
+      for (const blockId of qualifyingBlocks) {
+        const block = this.game.level.map.blocks.find((b) => b.id === blockId);
+        if (!block) continue;
+        const rect = svgEl('rect', {
+          class: 'clue-block-highlight',
+          x: block.x + 5,
+          y: block.y + 5,
+          width: Math.max(0, block.width - 10),
+          height: Math.max(0, block.height - 10),
+          rx: 5,
+        });
+        this.el.board.insertBefore(rect, housesGroup);
+        this.blockHighlightEls.push(rect);
+      }
+      setTimeout(() => this.clearClueHighlight(), 2100);
+    }
+  }
+
+  clearClueHighlight() {
+    for (const el of this.streetHighlightEls) {
+      el.style.stroke = el.dataset.oldStroke || '';
+      el.style.strokeWidth = '';
+    }
+    this.streetHighlightEls = [];
+    for (const el of this.blockHighlightEls) el.remove();
+    this.blockHighlightEls = [];
+  }
+
+  clearStreetHighlight() { this.clearClueHighlight(); }
+
+  showAccuseModal(show) { this.el.accuseModal.hidden = !show; this.syncModalLock(); }
+
+  showEnd({ won, score, questions, lives }) {
+    this.el.endModal.hidden = false;
+    this.syncModalLock();
+    this.el.endEyebrow.textContent = won ? `NIVEL ${this.game.levelNumber} RESUELTO` : `NIVEL ${this.game.levelNumber} · CASO CERRADO`;
+    this.el.endTitle.textContent = won ? 'Encontraste al asesino.' : 'Se acabaron las vidas.';
+    this.el.endScore.textContent = Math.max(0, score).toLocaleString('es-AR');
+    this.el.endQuestions.textContent = String(questions);
+    this.el.endLives.textContent = String(lives);
+    this.el.newGameBtn.textContent = won ? `Siguiente nivel · ${this.game.levelNumber + 1}` : 'Nuevo barrio';
+  }
+
+  hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
+
+  async showNightTransition() {
+    this.el.phaseToast.hidden = false;
+    this.el.phaseToast.classList.add('show');
+    await new Promise((r) => setTimeout(r, 1500));
+    this.el.phaseToast.classList.remove('show');
+    await new Promise((r) => setTimeout(r, 260));
+    this.el.phaseToast.hidden = true;
+  }
+
+  pulseHint(houseId) {
+    const el = this.getHouseEl(houseId);
+    if (!el) return;
+    el.classList.remove('hint-target');
+    void el.getBoundingClientRect();
+    el.classList.add('hint-target');
+    setTimeout(() => el.classList.remove('hint-target'), 3900);
+  }
+
+  async playResolution() {
+    const all = this.game.level.map.houses;
+    all.forEach((h) => this.getHouseEl(h.id)?.classList.remove('resolution-dim'));
+    for (let i = 1; i <= this.game.observations.length; i += 1) {
+      const candidates = getConsistentCandidates(this.game.level, this.game.observations.slice(0, i));
+      all.forEach((h) => this.getHouseEl(h.id)?.classList.toggle('resolution-dim', !candidates.includes(h.id)));
+      await new Promise((r) => setTimeout(r, 260));
+    }
+    all.forEach((h) => this.getHouseEl(h.id)?.classList.toggle('resolution-dim', h.id !== this.game.level.murdererId));
+  }
+
+  updateDebug() {
+    if (!this.game.level || !this.el.debugOutput) return;
+    const level = this.game.level;
+    const metrics = level.metrics;
+    const candidates = getConsistentCandidates(level, this.game.observations);
+    const minSets = metrics.minimumSolvingHouseSets || [];
+    const minSetPreview = minSets.slice(0, 6).map((set, i) => `  ${i + 1}. ${set.join(' + ')}`).join('\n');
+    const singleRulePass = metrics.singleClueUniqueCount === 0;
+    const perHouse = level.map.houses.map((h) => {
+      const standalone = metrics.standaloneCandidatesByHouse?.[h.id] || [];
+      const truth = h.id === level.murdererId ? 'MENTIRA' : 'VERDAD';
+      const asked = h.asked ? ' · interrogada' : '';
+      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · ${truth}`;
+    });
+    const lines = [
+      `SEED  ${level.seed}`,
+      `NIVEL ${level.levelNumber} · ${metrics.houseCount} casas`,
+      '',
+      `ASESINO REAL  ${level.murdererId}`,
+      `PREGUNTAS MÍNIMAS  ${metrics.minimumQuestions}`,
+      `CONJUNTOS MÍNIMOS POSIBLES  ${metrics.minimumSolvingSets}`,
+      `REGLA “1 PISTA NO RESUELVE”  ${singleRulePass ? 'OK' : 'ERROR'}${singleRulePass ? '' : ` (${metrics.singleClueUniqueCount} pista/s inequívoca/s)`}`,
+      `REDUCCIÓN MEDIA POR 1 PISTA  ${metrics.averageCandidateReduction}`,
+      `REDUNDANCIA  ${metrics.redundancyScore}`,
+      `FAMILIAS DE PISTAS  dirección ${metrics.clueFamilyCounts?.direction || 0} · calle ${metrics.clueFamilyCounts?.street || 0} · distancia ${metrics.clueFamilyCounts?.distance || 0}`,
+      `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
+      `TRAMA  ${level.map.cols}×${level.map.rows} · irregularidad ${Math.round((level.profile.spacingJitter || 0) * 100)}%`,
+      '',
+      `ESTADO ACTUAL`,
+      `interrogatorios: ${this.game.observations.length}`,
+      `candidatos compatibles: ${candidates.length}/${metrics.houseCount} · ${candidates.join(', ') || 'ninguno'}`,
+      '',
+      `EJEMPLOS DE CONJUNTOS MÍNIMOS${minSets.length > 6 ? ` (mostrando 6 de ${minSets.length})` : ''}`,
+      minSetPreview || '  ninguno',
+      '',
+      `INFORMACIÓN POR CASA`,
+      ...perHouse,
+    ];
+    this.el.debugOutput.textContent = lines.join('\n');
+  }
+}
+
+// ---- tests.js ----
+
+function test(name, fn) {
+  try { return { name, ok: Boolean(fn()) }; }
+  catch (error) { return { name, ok: false, error: error.message }; }
+}
+
+function runInternalTests() {
+  const level = generateLevel('self-test');
+  const timed = generateLevel('self-test-timed', { timed: true, levelNumber: 1 });
+  const fullObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+
+  const results = [
+    test('innocents always tell the truth', () => level.map.houses
+      .filter((h) => h.id !== level.murdererId)
+      .every((h) => evaluateClue(level, h.clue, level.murdererId) === true)),
+    test('murderer always lies', () => {
+      const h = level.map.houses.find((x) => x.id === level.murdererId);
+      return evaluateClue(level, h.clue, level.murdererId) === false;
+    }),
+    test('solver finds murderer', () => isUniqueSolution(level, fullObs, level.murdererId)),
+    test('same seed is deterministic', () => {
+      const a = generateLevel('determinism-check', { timed: true });
+      const b = generateLevel('determinism-check', { timed: true });
+      const slim = (x) => JSON.stringify({ murdererId: x.murdererId, houses: x.map.houses.map((h) => ({ rect: h.rect, clue: h.clue, until: h.availableUntil })) });
+      return slim(a) === slim(b);
+    }),
+    test('full observations leave exactly one candidate', () => getConsistentCandidates(level, fullObs).length === 1),
+    test('minimum subset really solves', () => {
+      const min = findMinimumSolvingSubsets(level);
+      return min.subsets.length > 0 && min.subsets.every((subset) => isUniqueSolution(level, subset, level.murdererId));
+    }),
+    test('graph distance is finite and symmetric', () => {
+      const a = level.map.houses[0];
+      const b = level.map.houses[1];
+      const ab = graphDistance(level.map, a, b);
+      const ba = graphDistance(level.map, b, a);
+      return Number.isFinite(ab) && ab === ba;
+    }),
+    test('T junction topology is supported', () => {
+      const map = generateMap(createRng('t-junction'), { cols: 4, rows: 3, houseCount: 8 });
+      // Remove one continuation of an interior vertical street. The meeting node remains degree 3: a T.
+      const seg = map.roadSegments.find((s) => s.id === 'RV_2_0');
+      if (!seg) return false;
+      seg.enabled = false;
+      map.graph = buildGraph(map);
+      const degreeThree = [...map.graph.values()].some((edges) => edges.length === 3);
+      return degreeThree;
+    }),
+    test('timed level remains solvable', () => timed.metrics.finalCandidates === 1),
+    test('assistance candidate set uses same solver', () => {
+      const partial = fullObs.slice(0, 3);
+      const a = getConsistentCandidates(level, partial);
+      const b = level.map.houses.filter((h) => getConsistentCandidates(level, partial).includes(h.id)).map((h) => h.id);
+      return JSON.stringify(a) === JSON.stringify(b);
+    }),
+    test('no single interrogation uniquely identifies the murderer', () => level.map.houses.every((h) => {
+      const candidates = getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]);
+      return candidates.length >= 2;
+    })),
+    test('level 9 visibly changes street topology', () => {
+      const profile = getLevelProfile(9);
+      const map = generateMap(createRng('street-variation'), { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, spacingJitter: profile.spacingJitter });
+      const degreeThree = [...map.graph.values()].some((edges) => edges.length === 3);
+      return map.removedStreetSegments >= 3 && degreeThree;
+    }),
+    test('street breaks are clean gaps between T junctions', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`clean-streets-${i}`), {
+      cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, spacingJitter: 0.24,
+    })).every((map) => validateStreetTopology(map).valid && map.roadSegments
+      .filter((segment) => !segment.enabled)
+      .every((segment) => (map.graph.get(segment.a) || []).length === 3 && (map.graph.get(segment.b) || []).length === 3))),
+    test('progressive levels increase neighborhood complexity', () => {
+      const early = getLevelProfile(1);
+      const later = getLevelProfile(9);
+      return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows;
+    }),
+    test('distance clues stay strongly limited in small neighborhoods', () => {
+      const samples = Array.from({ length: 24 }, (_, i) => generateLevel(`distance-small-${i}`, { levelNumber: 1 }));
+      return samples.every((sample) => sample.metrics.clueFamilyCounts.distance <= 1);
+    }),
+    test('distance clues stay strongly limited in larger neighborhoods', () => {
+      const samples = Array.from({ length: 24 }, (_, i) => generateLevel(`distance-large-${i}`, { levelNumber: 12 }));
+      return samples.every((sample) => sample.metrics.clueFamilyCounts.distance <= 1);
+    }),
+    test('distance remains a minority across generated seeds', () => {
+      const samples = Array.from({ length: 30 }, (_, i) => generateLevel(`distance-minority-${i}`, { levelNumber: 8 }));
+      const distances = samples.reduce((sum, sample) => sum + sample.metrics.clueFamilyCounts.distance, 0);
+      const clues = samples.reduce((sum, sample) => sum + sample.map.houses.length, 0);
+      return distances / clues < 0.1;
+    }),
+  ];
+  return { passed: results.filter((r) => r.ok).length, total: results.length, results };
+}
+
+// ---- main.js ----
+
+const params = new URLSearchParams(window.location.search);
+const seed = params.get('seed') || undefined;
+const timed = params.get('timed') === '1';
+const debug = params.get('debug') === '1';
+const levelNumber = Math.max(1, parseInt(params.get('level') || '1', 10) || 1);
+
+document.title = CONFIG.GAME_NAME;
+document.getElementById('brand').textContent = CONFIG.GAME_NAME.toUpperCase();
+
+try {
+  window.vecindario = new Game({ seed, timed, debug, levelNumber });
+} catch (error) {
+  console.error(error);
+  document.body.innerHTML = `<main style="font:16px system-ui;padding:32px;max-width:760px"><h1>No se pudo iniciar Vecindario</h1><p>${error.message}</p><p>Probá recargar con otra seed.</p></main>`;
+}
+
+})();
