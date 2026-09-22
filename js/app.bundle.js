@@ -16,9 +16,12 @@ const CONFIG = {
   BASE_SCORE: 3000,
   SCORE_PER_LEVEL: 350,
   INTERROGATION_COST: 100,
-  HINT_COST: 500,
+  HINT_COST: 5000,
   WRONG_ACCUSATION_COST: 300,
   STARTING_LIVES: 3,
+  LIFE_COST: 3000,
+  SUNSET_COST: 10000,
+  LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
   SUNSET_HOUR: 18,
   NIGHT_HOUR: 20,
@@ -91,6 +94,14 @@ englishCopy.units={question:['question','questions'],life:['life','lives'],point
 spanishCopy.error={title:'No se pudo abrir el barrio.',retry:'Probá recargar la página.'};
 englishCopy.error={title:'The neighborhood could not be opened.',retry:'Try reloading the page.'};
 const translations={es:spanishCopy,en:englishCopy};
+spanishCopy.actions.buyLife='Recuperar vida';
+englishCopy.actions.buyLife='Restore life';
+spanishCopy.defeat.text='No te quedan vidas.';
+englishCopy.defeat.text="You have no lives left.";
+spanishCopy.lifePurchase={full:'Ya tenés todas las vidas.',poor:'Necesitás 3000 puntos.',ready:'Comprá una vida por 3000 puntos.'};
+englishCopy.lifePurchase={full:'Your lives are full.',poor:'You need 3000 points.',ready:'Buy one life for 3000 points.'};
+spanishCopy.shop={visit:'TIENDA Y CONTINUAR',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',sunset:'Atardecer',sunsetHelp:'Un fondo naranja cálido para recorrer el barrio.',buy:'Desbloquear',owned:'Desbloqueado',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saved:'Atardecer ya es tuyo. Elegí el ambiente que prefieras.',saveMore:'Podés seguir ahorrando: Atardecer cuesta 10.000 puntos.',themes:'AMBIENTE',day:'Claro',night:'Oscuro',continue:'SIGUIENTE BARRIO',cycle:'Cambiar ambiente: claro, oscuro o atardecer desbloqueado',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.'};
+englishCopy.shop={visit:'SHOP AND CONTINUE',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',sunset:'Sunset',sunsetHelp:'A warm orange backdrop for your investigation.',buy:'Unlock',owned:'Unlocked',permanent:'A permanent purchase. Switch themes whenever you like.',saved:'Sunset is yours. Choose whichever theme you prefer.',saveMore:'Keep saving: Sunset costs 10,000 points.',themes:'THEME',day:'Light',night:'Dark',continue:'NEXT NEIGHBORHOOD',cycle:'Change theme: light, dark or unlocked sunset',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.'};
 const debugWords={
   seed:['SEED','SEED'],level:['NIVEL','LEVEL'],houses:['casas','houses'],murderer:['ASESINO REAL','ACTUAL MURDERER'],minimum:['PREGUNTAS MÍNIMAS','MINIMUM QUESTIONS'],sets:['CONJUNTOS MÍNIMOS POSIBLES','MINIMUM SOLVING SETS'],single:['REGLA: UNA PISTA NO RESUELVE','RULE: ONE CLUE CANNOT SOLVE'],reduction:['REDUCCIÓN MEDIA POR PISTA','AVERAGE REDUCTION PER CLUE'],redundancy:['REDUNDANCIA','REDUNDANCY'],families:['DISTRIBUCIÓN DE FAMILIAS','CLUE FAMILY DISTRIBUTION'],minFamilies:['FAMILIAS EN SOLUCIONES MÍNIMAS','FAMILIES IN MINIMUM SOLUTIONS'],compound:['COMPUESTAS','COMPOUND CLUES'],complexity:['COMPLEJIDAD MEDIA','AVERAGE COMPLEXITY'],areas:['ÁREAS DE CASAS','HOUSE AREAS'],sizes:['TAMAÑOS','SIZES'],lots:['lotes','lots'],properties:['PROPIEDADES GEOMÉTRICAS','GEOMETRIC PROPERTIES'],unique:['ÚNICA','UNIQUE'],uniqueProperties:['PROPIEDADES ÚNICAS','UNIQUE PROPERTIES'],warnings:['ALERTAS VISUALES','VISUAL WARNINGS'],none:['ninguna','none'],breaks:['TRAMOS INTERRUMPIDOS','MISSING STREET SEGMENTS'],grid:['TRAMA','GRID'],missing:['manzanas ausentes','missing blocks'],current:['ESTADO ACTUAL','CURRENT STATE'],questions:['interrogatorios','questions'],candidates:['CANDIDATOS ACTUALES','CURRENT CANDIDATES'],examples:['EJEMPLOS DE CONJUNTOS MÍNIMOS (HASTA 6)','MINIMUM SET EXAMPLES (UP TO 6)'],houseInfo:['INFORMACIÓN POR CASA','INFORMATION BY HOUSE'],lie:['MENTIRA','LIE'],truth:['VERDAD','TRUTH'],asked:['interrogada','questioned'],family:['familia','family'],predicate:['predicado','predicate'],inMinimum:['en conjunto mínimo','in minimum set'],yes:['sí','yes'],no:['no','no'],house:['casa','house'],area:['área','area'],fronts:['frentes','street-facing sides'],alone:['sola deja','alone leaves'],reduces:['reduce','reduces'],information:['información','information'],validating:['Validando…','Validating…'],tests:['pruebas internas','internal tests'],generated:['generados','generated'],valid:['válidos','valid'],invalid:['inválidos','invalid'],failed:['seeds fallidas','failed seeds'],reasons:['motivos','reasons'],
 };
@@ -1132,7 +1143,7 @@ function batchValidate(count = 100, { timed = false, prefix = 'batch', levelNumb
 function safeGetTheme() {
   try {
     const saved = localStorage.getItem('vecindario-theme');
-    return saved === 'night' ? 'night' : 'day';
+    return ['day','night','sunset'].includes(saved) ? saved : 'day';
   } catch (_) {
     return 'day';
   }
@@ -1150,7 +1161,11 @@ class Game {
     this.debug = debug;
     this.pendingMode = 'normal';
     this.mode = 'normal';
+    this.sunsetUnlocked = false;
+    try { this.sunsetUnlocked=localStorage.getItem('vecindario.unlock.sunset')==='true'; } catch (_) {}
     this.theme = safeGetTheme();
+    if(this.theme==='sunset' && !this.sunsetUnlocked) this.theme='day';
+    this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
     this.ui = new UI(this);
@@ -1165,8 +1180,11 @@ class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
-    this.score = CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
-    this.lives = CONFIG.STARTING_LIVES;
+    this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
+    this.shopOpen=false;
+    this.ui.showShop(false);
+    this.lives ??= CONFIG.STARTING_LIVES;
+    this.losingLife = false;
     this.currentHour = this.level.startHour;
     this.observations = [];
     this.selectedHouseId = null;
@@ -1204,7 +1222,7 @@ class Game {
 
   async interrogateSelected() {
     const h = this.selectedHouse;
-    if (!h || h.asked || this.finished) return;
+    if (!h || h.asked || this.finished || this.losingLife) return;
     if (this.level.timed && this.currentHour >= h.availableUntil) return;
     const beforePhase = phaseForHour(this.currentHour, CONFIG);
     h.asked = true;
@@ -1234,7 +1252,7 @@ class Game {
 
   prepareAccusation() {
     const h = this.selectedHouse;
-    if (!h || this.finished || h.confirmedInnocent) return;
+    if (!h || this.finished || this.losingLife || h.confirmedInnocent) return;
     this.pendingAccusationId = h.id;
     this.ui.showAccuseModal(true);
     this.ui.refresh();
@@ -1248,7 +1266,7 @@ class Game {
 
   async confirmAccusation() {
     const id = this.pendingAccusationId;
-    if (!id || this.finished) return;
+    if (!id || this.finished || this.losingLife) return;
     this.ui.showAccuseModal(false);
     this.pendingAccusationId = null;
     if (id === this.level.murdererId) {
@@ -1265,9 +1283,13 @@ class Game {
     const house = this.level.map.houses.find((h) => h.id === id);
     house.confirmedInnocent = true;
     house.mark = 'cleared';
-    this.lives -= 1;
     this.score -= CONFIG.WRONG_ACCUSATION_COST;
     this.audio.wrong();
+    this.losingLife = true;
+    this.ui.refresh();
+    await new Promise(resolve => setTimeout(resolve, CONFIG.LIFE_LOSS_FLASH_MS));
+    this.lives -= 1;
+    this.losingLife = false;
     if (this.lives <= 0) {
       this.finished = true;
       this.revealedMurderer = true;
@@ -1282,7 +1304,7 @@ class Game {
   }
 
   useHint() {
-    if (this.hintUsed || this.finished) return;
+    if (this.hintUsed || this.finished || this.losingLife || this.score < CONFIG.HINT_COST) return;
     const hint = bestHintHouse(this.level, this.observations, this.level.timed ? this.currentHour : null);
     if (!hint) {
       const closed=this.level.timed && this.level.map.houses.some(h=>!h.asked) && this.level.map.houses.filter(h=>!h.asked).every(h=>this.currentHour>=h.availableUntil);
@@ -1299,14 +1321,49 @@ class Game {
 
   toggleSound() { this.audio.toggle(); this.ui.refresh(); }
 
+  buyLife() {
+    if ((this.finished && !this.shopOpen) || this.losingLife || this.lives >= CONFIG.STARTING_LIVES || this.score < CONFIG.LIFE_COST) return false;
+    this.score -= CONFIG.LIFE_COST;
+    this.lives += 1;
+    this.ui.refresh();
+    return true;
+  }
+
   toggleTheme() {
     if (this.level?.timed) return;
-    this.theme = this.theme === 'night' ? 'day' : 'night';
-    safeSaveTheme(this.theme);
+    const themes=this.availableThemes();
+    this.selectTheme(themes[(themes.indexOf(this.theme)+1)%themes.length]);
+  }
+
+  availableThemes() { return this.sunsetUnlocked ? ['day','night','sunset'] : ['day','night']; }
+
+  selectTheme(theme) {
+    if ((this.level?.timed && !this.shopOpen) || !this.availableThemes().includes(theme)) return false;
+    this.theme=theme;
+    safeSaveTheme(theme);
+    this.ui.refresh();
+    return true;
+  }
+
+  buySunset() {
+    if (!this.shopOpen || !this.lastOutcomeWon || this.sunsetUnlocked || this.score<CONFIG.SUNSET_COST) return false;
+    this.score-=CONFIG.SUNSET_COST;
+    this.sunsetUnlocked=true;
+    try { localStorage.setItem('vecindario.unlock.sunset','true'); } catch (_) {}
+    this.selectTheme('sunset');
+    return true;
+  }
+
+  openShop() {
+    if(!this.finished || !this.lastOutcomeWon) return;
+    this.shopOpen=true;
+    this.ui.hideEnd();
+    this.ui.showShop(true);
     this.ui.refresh();
   }
 
   retry() {
+    if (this.finished && this.lives === 0) { this.lives = CONFIG.STARTING_LIVES; this.score=undefined; }
     const mode = this.mode;
     this.loadLevel(this.seed, { timed: this.timed, levelNumber: this.levelNumber });
     this.mode = mode;
@@ -1325,6 +1382,7 @@ class Game {
   }
 
   newGame() {
+    if (this.finished && this.lives === 0) { this.lives = CONFIG.STARTING_LIVES; this.score=undefined; }
     const mode = this.mode;
     const next = randomSeed();
     this.updateUrl(next, this.levelNumber, this.timed);
@@ -1335,8 +1393,11 @@ class Game {
   }
 
   nextLevel() {
+    if(!this.finished || !this.lastOutcomeWon || !this.shopOpen) return;
     const mode = this.mode;
     const nextLevelNumber = this.levelNumber + 1;
+    // Keep unspent points and grant the existing next-level starting allocation once.
+    this.score = Math.max(0,this.score) + CONFIG.BASE_SCORE + (nextLevelNumber-1)*CONFIG.SCORE_PER_LEVEL;
     const nextSeed = randomSeed();
     this.updateUrl(nextSeed, nextLevelNumber, false);
     this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
@@ -1346,7 +1407,7 @@ class Game {
   }
 
   advanceOrNew() {
-    if (this.lastOutcomeWon) this.nextLevel();
+    if (this.lastOutcomeWon) this.openShop();
     else this.newGame();
   }
 
@@ -1437,7 +1498,7 @@ class UI {
       'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','shopModal','shopBalance','shopLives','shopLifeBtn','shopSunsetBtn','shopContinueBtn','shopStatus'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -1445,7 +1506,7 @@ class UI {
   }
 
   syncModalLock() {
-    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal].some((el) => el && !el.hidden);
+    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal,this.el.shopModal].some((el) => el && !el.hidden);
     document.body.classList.toggle('modal-open', anyOpen);
   }
 
@@ -1486,6 +1547,12 @@ class UI {
     this.el.cancelAccuseBtn.addEventListener('click', () => this.game.cancelAccusation());
     this.el.confirmAccuseBtn.addEventListener('click', () => this.game.confirmAccusation());
     this.el.hintBtn.addEventListener('click', () => this.game.useHint());
+    this.el.buyLifeBtn=document.getElementById('buyLifeBtn');
+    this.el.buyLifeBtn.addEventListener('click',()=>this.game.buyLife());
+    this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
+    this.el.shopSunsetBtn.addEventListener('click',()=>this.game.buySunset());
+    this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
+    document.querySelectorAll('[data-shop-theme]').forEach(btn=>btn.addEventListener('click',()=>this.game.selectTheme(btn.dataset.shopTheme)));
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
     this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
@@ -1583,7 +1650,15 @@ class UI {
   refresh() {
     const g = this.game;
     this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
-    this.el.livesValue.textContent = Array.from({ length: CONFIG.STARTING_LIVES }, (_, i) => i < g.lives ? '●' : '○').join(' ');
+    this.el.livesValue.replaceChildren(...Array.from({length:CONFIG.STARTING_LIVES},(_,i)=>{
+      const dot=document.createElement('span');
+      dot.className='life-dot '+(i<g.lives?'life-active':'life-empty')+(g.losingLife && i===g.lives-1?' life-losing':'');
+      dot.textContent=i<g.lives?'●':'○';
+      dot.setAttribute('aria-hidden','true');
+      return dot;
+    }));
+    this.el.livesValue.setAttribute('aria-label',formatCount(g.lives,'life'));
+    this.el.livesValue.setAttribute('aria-live','polite');
     this.el.levelValue.textContent = String(g.levelNumber);
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
@@ -1592,7 +1667,7 @@ class UI {
     this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
-    if (g.level?.timed) {
+    if (g.level?.timed && !g.shopOpen) {
       this.el.timeStatus.classList.add('is-timed');
       this.el.timeStatus.setAttribute('aria-label', t('aria.time'));
       this.el.timeStatus.disabled = true;
@@ -1602,9 +1677,9 @@ class UI {
     } else {
       this.el.timeStatus.classList.remove('is-timed');
       this.el.timeStatus.disabled = false;
-      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? t('aria.light') : t('aria.night'));
+      this.el.timeStatus.setAttribute('aria-label',t('shop.cycle'));
       this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
-      this.el.timeValue.textContent = g.theme === 'night' ? t('labels.night') : t('labels.light');
+      this.el.timeValue.textContent = t('shop.'+g.theme);
       this.el.app.dataset.phase = g.theme;
     }
 
@@ -1641,9 +1716,34 @@ class UI {
     this.el.accuseBtn.disabled = !has || g.finished || selected.confirmedInnocent;
     this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? uiText.actions.unmark : uiText.actions.suspect;
     this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? uiText.actions.unclear : uiText.actions.clear;
-    this.el.hintBtn.disabled = g.hintUsed || g.finished;
+    this.el.hintBtn.disabled = g.hintUsed || g.finished || g.score < CONFIG.HINT_COST;
+    this.el.hintBtn.lastElementChild.textContent='−'+CONFIG.HINT_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.buyLifeBtn.disabled=g.finished || g.losingLife || g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST;
+    this.el.buyLifeBtn.lastElementChild.textContent='−'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.buyLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
+    if(g.losingLife) for(const key of ['interrogateBtn','accuseBtn','hintBtn']) this.el[key].disabled=true;
 
+    this.refreshShop();
     this.updateDebug();
+  }
+
+  showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
+
+  refreshShop() {
+    if(!this.el.shopModal || this.el.shopModal.hidden) return;
+    const g=this.game;
+    this.el.shopBalance.textContent=formatCount(Math.max(0,g.score),'point');
+    this.el.shopLives.textContent=formatCount(g.lives,'life');
+    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopLifeBtn.disabled=g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST || g.losingLife;
+    this.el.shopLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
+    this.el.shopSunsetBtn.textContent=g.sunsetUnlocked?t('shop.owned'):t('shop.buy')+' −'+CONFIG.SUNSET_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopSunsetBtn.disabled=g.sunsetUnlocked || g.score<CONFIG.SUNSET_COST;
+    this.el.shopStatus.textContent=t(g.sunsetUnlocked?'shop.saved':g.score<CONFIG.SUNSET_COST?'shop.saveMore':'shop.permanent');
+    document.querySelectorAll('[data-shop-theme]').forEach(btn=>{
+      btn.disabled=btn.dataset.shopTheme==='sunset' && !g.sunsetUnlocked;
+      btn.setAttribute('aria-pressed',String(btn.dataset.shopTheme===g.theme));
+    });
   }
 
   changeLanguage(language) {
@@ -1751,7 +1851,7 @@ class UI {
     this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
     this.el.endQuestions.textContent = formatCount(questions,'question');
     this.el.endLives.textContent = formatCount(lives,'life');
-    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
+    this.el.newGameBtn.textContent = won ? t('shop.visit') : uiText.defeat.next;
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }

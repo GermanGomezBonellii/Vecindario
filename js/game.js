@@ -11,7 +11,7 @@ import { runInternalTests } from './tests.js';
 function safeGetTheme() {
   try {
     const saved = localStorage.getItem('vecindario-theme');
-    return saved === 'night' ? 'night' : 'day';
+    return ['day','night','sunset'].includes(saved) ? saved : 'day';
   } catch (_) {
     return 'day';
   }
@@ -29,7 +29,11 @@ export class Game {
     this.debug = debug;
     this.pendingMode = 'normal';
     this.mode = 'normal';
+    this.sunsetUnlocked = false;
+    try { this.sunsetUnlocked=localStorage.getItem('vecindario.unlock.sunset')==='true'; } catch (_) {}
     this.theme = safeGetTheme();
+    if(this.theme==='sunset' && !this.sunsetUnlocked) this.theme='day';
+    this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
     this.ui = new UI(this);
@@ -44,8 +48,11 @@ export class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
-    this.score = CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
-    this.lives = CONFIG.STARTING_LIVES;
+    this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
+    this.shopOpen=false;
+    this.ui.showShop(false);
+    this.lives ??= CONFIG.STARTING_LIVES;
+    this.losingLife = false;
     this.currentHour = this.level.startHour;
     this.observations = [];
     this.selectedHouseId = null;
@@ -83,7 +90,7 @@ export class Game {
 
   async interrogateSelected() {
     const h = this.selectedHouse;
-    if (!h || h.asked || this.finished) return;
+    if (!h || h.asked || this.finished || this.losingLife) return;
     if (this.level.timed && this.currentHour >= h.availableUntil) return;
     const beforePhase = phaseForHour(this.currentHour, CONFIG);
     h.asked = true;
@@ -113,7 +120,7 @@ export class Game {
 
   prepareAccusation() {
     const h = this.selectedHouse;
-    if (!h || this.finished || h.confirmedInnocent) return;
+    if (!h || this.finished || this.losingLife || h.confirmedInnocent) return;
     this.pendingAccusationId = h.id;
     this.ui.showAccuseModal(true);
     this.ui.refresh();
@@ -127,7 +134,7 @@ export class Game {
 
   async confirmAccusation() {
     const id = this.pendingAccusationId;
-    if (!id || this.finished) return;
+    if (!id || this.finished || this.losingLife) return;
     this.ui.showAccuseModal(false);
     this.pendingAccusationId = null;
     if (id === this.level.murdererId) {
@@ -144,9 +151,13 @@ export class Game {
     const house = this.level.map.houses.find((h) => h.id === id);
     house.confirmedInnocent = true;
     house.mark = 'cleared';
-    this.lives -= 1;
     this.score -= CONFIG.WRONG_ACCUSATION_COST;
     this.audio.wrong();
+    this.losingLife = true;
+    this.ui.refresh();
+    await new Promise(resolve => setTimeout(resolve, CONFIG.LIFE_LOSS_FLASH_MS));
+    this.lives -= 1;
+    this.losingLife = false;
     if (this.lives <= 0) {
       this.finished = true;
       this.revealedMurderer = true;
@@ -161,7 +172,7 @@ export class Game {
   }
 
   useHint() {
-    if (this.hintUsed || this.finished) return;
+    if (this.hintUsed || this.finished || this.losingLife || this.score < CONFIG.HINT_COST) return;
     const hint = bestHintHouse(this.level, this.observations, this.level.timed ? this.currentHour : null);
     if (!hint) {
       const closed=this.level.timed && this.level.map.houses.some(h=>!h.asked) && this.level.map.houses.filter(h=>!h.asked).every(h=>this.currentHour>=h.availableUntil);
@@ -178,14 +189,49 @@ export class Game {
 
   toggleSound() { this.audio.toggle(); this.ui.refresh(); }
 
+  buyLife() {
+    if ((this.finished && !this.shopOpen) || this.losingLife || this.lives >= CONFIG.STARTING_LIVES || this.score < CONFIG.LIFE_COST) return false;
+    this.score -= CONFIG.LIFE_COST;
+    this.lives += 1;
+    this.ui.refresh();
+    return true;
+  }
+
   toggleTheme() {
     if (this.level?.timed) return;
-    this.theme = this.theme === 'night' ? 'day' : 'night';
-    safeSaveTheme(this.theme);
+    const themes=this.availableThemes();
+    this.selectTheme(themes[(themes.indexOf(this.theme)+1)%themes.length]);
+  }
+
+  availableThemes() { return this.sunsetUnlocked ? ['day','night','sunset'] : ['day','night']; }
+
+  selectTheme(theme) {
+    if ((this.level?.timed && !this.shopOpen) || !this.availableThemes().includes(theme)) return false;
+    this.theme=theme;
+    safeSaveTheme(theme);
+    this.ui.refresh();
+    return true;
+  }
+
+  buySunset() {
+    if (!this.shopOpen || !this.lastOutcomeWon || this.sunsetUnlocked || this.score<CONFIG.SUNSET_COST) return false;
+    this.score-=CONFIG.SUNSET_COST;
+    this.sunsetUnlocked=true;
+    try { localStorage.setItem('vecindario.unlock.sunset','true'); } catch (_) {}
+    this.selectTheme('sunset');
+    return true;
+  }
+
+  openShop() {
+    if(!this.finished || !this.lastOutcomeWon) return;
+    this.shopOpen=true;
+    this.ui.hideEnd();
+    this.ui.showShop(true);
     this.ui.refresh();
   }
 
   retry() {
+    if (this.finished && this.lives === 0) { this.lives = CONFIG.STARTING_LIVES; this.score=undefined; }
     const mode = this.mode;
     this.loadLevel(this.seed, { timed: this.timed, levelNumber: this.levelNumber });
     this.mode = mode;
@@ -204,6 +250,7 @@ export class Game {
   }
 
   newGame() {
+    if (this.finished && this.lives === 0) { this.lives = CONFIG.STARTING_LIVES; this.score=undefined; }
     const mode = this.mode;
     const next = randomSeed();
     this.updateUrl(next, this.levelNumber, this.timed);
@@ -214,8 +261,11 @@ export class Game {
   }
 
   nextLevel() {
+    if(!this.finished || !this.lastOutcomeWon || !this.shopOpen) return;
     const mode = this.mode;
     const nextLevelNumber = this.levelNumber + 1;
+    // Keep unspent points and grant the existing next-level starting allocation once.
+    this.score = Math.max(0,this.score) + CONFIG.BASE_SCORE + (nextLevelNumber-1)*CONFIG.SCORE_PER_LEVEL;
     const nextSeed = randomSeed();
     this.updateUrl(nextSeed, nextLevelNumber, false);
     this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
@@ -225,7 +275,7 @@ export class Game {
   }
 
   advanceOrNew() {
-    if (this.lastOutcomeWon) this.nextLevel();
+    if (this.lastOutcomeWon) this.openShop();
     else this.newGame();
   }
 

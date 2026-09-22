@@ -42,6 +42,29 @@ body {
   transition: background-color var(--transition), color var(--transition);
 }
 body.modal-open { overflow: hidden; }
+.modal.shop-modal { width: min(700px, 100%); }
+.modal.shop-modal h2 { font-size: clamp(24px, 4vw, 36px); line-height: 1.1; }
+.shop-wallet { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 0; border-block: 1px solid var(--border); }
+.shop-wallet > span { font-size: 11px; letter-spacing: .1em; color: var(--muted); }
+.shop-items { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-top: 18px; }
+.shop-item { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; }
+.shop-item h3,.shop-item p { margin: 0; }
+.shop-item p { font-size: 13px; }
+.shop-item button { margin-top: auto; width: 100%; }
+.shop-life-art { color: var(--life-active); font-size: 30px; height: 42px; }
+.sunset-swatch { height: 42px; border-radius: 8px; background: #e99853; border: 1px solid rgba(58,35,21,.22); }
+.shop-themes { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: color-mix(in srgb,var(--ink) 7%,var(--surface)); }
+.shop-themes button { flex: 1; min-width: 0; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); cursor: pointer; }
+.shop-themes button[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow); font-weight: 800; }
+.shop-credit { font-size: 12px; }
+#shopContinueBtn { width: 100%; }
+@media(max-width: 440px) { .shop-items { grid-template-columns: 1fr; } }
+:root { --life-active: #16803c; --life-losing: #cf2635; }
+:root[data-theme="dark"] { --life-active: #65dc8d; --life-losing: #ff707c; }
+#livesValue { display: inline-flex; gap: 6px; }
+.life-active { color: var(--life-active); }
+.life-empty { color: var(--muted); }
+.life-losing { color: var(--life-losing); }
 .language-switch { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 10px; padding: 2px; color: var(--muted); background: var(--surface); }
 .language-switch button { border: 0; border-radius: 7px; padding: 8px 6px; min-height: 36px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
 .language-switch button[aria-pressed="true"] { color: var(--surface); background: var(--ink); font-weight: 800; }

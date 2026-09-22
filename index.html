@@ -6,7 +6,10 @@
   <meta name="theme-color" content="#f7f7f3">
   <title>Vecindario</title>
   <script>
-    try { document.documentElement.dataset.theme = localStorage.getItem('vecindario-theme') === 'night' ? 'dark' : 'light'; } catch (_) {}
+    try {
+      const savedTheme=localStorage.getItem('vecindario-theme');
+      document.documentElement.dataset.theme=savedTheme==='night'?'dark':savedTheme==='sunset' && localStorage.getItem('vecindario.unlock.sunset')==='true'?'sunset':'light';
+    } catch (_) {}
   </script>
   <link rel="stylesheet" href="./css/styles.css">
 </head>
@@ -71,7 +74,8 @@
             <button id="clearBtn" class="action" type="button" disabled data-copy="actions.clear"></button>
             <button id="accuseBtn" class="action danger" type="button" disabled data-copy="actions.accuse"></button>
           </div>
-          <button id="hintBtn" class="hint-button" type="button"><span data-copy="actions.help"></span> <span>−500</span></button>
+          <button id="hintBtn" class="hint-button" type="button"><span data-copy="actions.help"></span> <span>−5000</span></button>
+          <button id="buyLifeBtn" class="hint-button" type="button"><span data-copy="actions.buyLife"></span> <span>−3000</span></button>
         </section>
 
         <section class="legend" data-copy-aria="aria.legend">
@@ -130,6 +134,27 @@
           <button id="retryBtn" class="modal-secondary" type="button" data-copy="defeat.retry"></button>
           <button id="newGameBtn" class="modal-primary" type="button" data-copy="defeat.next"></button>
         </div>
+      </section>
+    </div>
+
+    <div id="shopModal" class="modal-backdrop" hidden>
+      <section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+        <span class="eyebrow" data-copy="shop.eyebrow"></span>
+        <h2 id="shopTitle" data-copy="shop.title"></h2>
+        <p data-copy="shop.intro"></p>
+        <div class="shop-wallet"><span data-copy="shop.balance"></span><strong id="shopBalance" aria-live="polite"></strong></div>
+        <div class="shop-items">
+          <article class="shop-item"><span class="shop-life-art" aria-hidden="true">●</span><h3 data-copy="shop.life"></h3><p data-copy="shop.lifeHelp"></p><strong id="shopLives"></strong><button id="shopLifeBtn" class="modal-secondary" type="button"></button></article>
+          <article class="shop-item"><div class="sunset-swatch" aria-hidden="true"></div><h3 data-copy="shop.sunset"></h3><p data-copy="shop.sunsetHelp"></p><button id="shopSunsetBtn" class="modal-secondary" type="button"></button></article>
+        </div>
+        <p id="shopStatus" aria-live="polite"></p>
+        <div class="shop-themes" role="group" data-copy-aria="shop.themes">
+          <button type="button" data-shop-theme="day" data-copy="shop.day" aria-pressed="false"></button>
+          <button type="button" data-shop-theme="night" data-copy="shop.night" aria-pressed="false"></button>
+          <button type="button" data-shop-theme="sunset" data-copy="shop.sunset" aria-pressed="false"></button>
+        </div>
+        <p class="shop-credit" data-copy="shop.credit"></p>
+        <button id="shopContinueBtn" class="modal-primary" type="button" data-copy="shop.continue"></button>
       </section>
     </div>
 

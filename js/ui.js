@@ -21,7 +21,7 @@ export class UI {
       'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','shopModal','shopBalance','shopLives','shopLifeBtn','shopSunsetBtn','shopContinueBtn','shopStatus'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -29,7 +29,7 @@ export class UI {
   }
 
   syncModalLock() {
-    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal].some((el) => el && !el.hidden);
+    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal,this.el.shopModal].some((el) => el && !el.hidden);
     document.body.classList.toggle('modal-open', anyOpen);
   }
 
@@ -70,6 +70,12 @@ export class UI {
     this.el.cancelAccuseBtn.addEventListener('click', () => this.game.cancelAccusation());
     this.el.confirmAccuseBtn.addEventListener('click', () => this.game.confirmAccusation());
     this.el.hintBtn.addEventListener('click', () => this.game.useHint());
+    this.el.buyLifeBtn=document.getElementById('buyLifeBtn');
+    this.el.buyLifeBtn.addEventListener('click',()=>this.game.buyLife());
+    this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
+    this.el.shopSunsetBtn.addEventListener('click',()=>this.game.buySunset());
+    this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
+    document.querySelectorAll('[data-shop-theme]').forEach(btn=>btn.addEventListener('click',()=>this.game.selectTheme(btn.dataset.shopTheme)));
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
     this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
@@ -167,7 +173,15 @@ export class UI {
   refresh() {
     const g = this.game;
     this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
-    this.el.livesValue.textContent = Array.from({ length: CONFIG.STARTING_LIVES }, (_, i) => i < g.lives ? '●' : '○').join(' ');
+    this.el.livesValue.replaceChildren(...Array.from({length:CONFIG.STARTING_LIVES},(_,i)=>{
+      const dot=document.createElement('span');
+      dot.className='life-dot '+(i<g.lives?'life-active':'life-empty')+(g.losingLife && i===g.lives-1?' life-losing':'');
+      dot.textContent=i<g.lives?'●':'○';
+      dot.setAttribute('aria-hidden','true');
+      return dot;
+    }));
+    this.el.livesValue.setAttribute('aria-label',formatCount(g.lives,'life'));
+    this.el.livesValue.setAttribute('aria-live','polite');
     this.el.levelValue.textContent = String(g.levelNumber);
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
@@ -176,7 +190,7 @@ export class UI {
     this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
-    if (g.level?.timed) {
+    if (g.level?.timed && !g.shopOpen) {
       this.el.timeStatus.classList.add('is-timed');
       this.el.timeStatus.setAttribute('aria-label', t('aria.time'));
       this.el.timeStatus.disabled = true;
@@ -186,9 +200,9 @@ export class UI {
     } else {
       this.el.timeStatus.classList.remove('is-timed');
       this.el.timeStatus.disabled = false;
-      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? t('aria.light') : t('aria.night'));
+      this.el.timeStatus.setAttribute('aria-label',t('shop.cycle'));
       this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
-      this.el.timeValue.textContent = g.theme === 'night' ? t('labels.night') : t('labels.light');
+      this.el.timeValue.textContent = t('shop.'+g.theme);
       this.el.app.dataset.phase = g.theme;
     }
 
@@ -225,9 +239,34 @@ export class UI {
     this.el.accuseBtn.disabled = !has || g.finished || selected.confirmedInnocent;
     this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? uiText.actions.unmark : uiText.actions.suspect;
     this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? uiText.actions.unclear : uiText.actions.clear;
-    this.el.hintBtn.disabled = g.hintUsed || g.finished;
+    this.el.hintBtn.disabled = g.hintUsed || g.finished || g.score < CONFIG.HINT_COST;
+    this.el.hintBtn.lastElementChild.textContent='−'+CONFIG.HINT_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.buyLifeBtn.disabled=g.finished || g.losingLife || g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST;
+    this.el.buyLifeBtn.lastElementChild.textContent='−'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.buyLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
+    if(g.losingLife) for(const key of ['interrogateBtn','accuseBtn','hintBtn']) this.el[key].disabled=true;
 
+    this.refreshShop();
     this.updateDebug();
+  }
+
+  showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
+
+  refreshShop() {
+    if(!this.el.shopModal || this.el.shopModal.hidden) return;
+    const g=this.game;
+    this.el.shopBalance.textContent=formatCount(Math.max(0,g.score),'point');
+    this.el.shopLives.textContent=formatCount(g.lives,'life');
+    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopLifeBtn.disabled=g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST || g.losingLife;
+    this.el.shopLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
+    this.el.shopSunsetBtn.textContent=g.sunsetUnlocked?t('shop.owned'):t('shop.buy')+' −'+CONFIG.SUNSET_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopSunsetBtn.disabled=g.sunsetUnlocked || g.score<CONFIG.SUNSET_COST;
+    this.el.shopStatus.textContent=t(g.sunsetUnlocked?'shop.saved':g.score<CONFIG.SUNSET_COST?'shop.saveMore':'shop.permanent');
+    document.querySelectorAll('[data-shop-theme]').forEach(btn=>{
+      btn.disabled=btn.dataset.shopTheme==='sunset' && !g.sunsetUnlocked;
+      btn.setAttribute('aria-pressed',String(btn.dataset.shopTheme===g.theme));
+    });
   }
 
   changeLanguage(language) {
@@ -335,7 +374,7 @@ export class UI {
     this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
     this.el.endQuestions.textContent = formatCount(questions,'question');
     this.el.endLives.textContent = formatCount(lives,'life');
-    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
+    this.el.newGameBtn.textContent = won ? t('shop.visit') : uiText.defeat.next;
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
