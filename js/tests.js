@@ -64,7 +64,7 @@ export function runInternalTests() {
     })),
     test('level 9 visibly changes street topology', () => {
       const profile = getLevelProfile(9);
-      const map = generateMap(createRng('street-variation'), { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, spacingJitter: profile.spacingJitter });
+      const map = generateMap(createRng('street-variation'), { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks });
       const degreeThree = [...map.graph.values()].some((edges) => edges.length === 3);
       return map.removedStreetSegments >= 3 && degreeThree;
     }),
@@ -76,7 +76,14 @@ export function runInternalTests() {
     test('progressive levels increase neighborhood complexity', () => {
       const early = getLevelProfile(1);
       const later = getLevelProfile(9);
-      return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows;
+      return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows && later.missingBlocks > 0;
+    }),
+    test('rectangular blocks contain square lots and houses', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`square-layout-${i}`), {
+      cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2,
+    })).every((map) => validateStreetTopology(map).valid)),
+    test('irregular neighborhoods contain real missing blocks', () => {
+      const map = generateMap(createRng('irregular-footprint'), { cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2 });
+      return map.blocks.length === 18 && map.missingBlocks === 2;
     }),
     test('distance clues stay strongly limited in small neighborhoods', () => {
       const samples = Array.from({ length: 24 }, (_, i) => generateLevel(`distance-small-${i}`, { levelNumber: 1 }));

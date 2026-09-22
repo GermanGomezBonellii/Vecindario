@@ -81,24 +81,37 @@ export class UI {
     const svg = this.el.board;
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-    const lotsGroup = svgEl('g', { 'aria-hidden': 'true' });
+    const defs = svgEl('defs');
+    svg.appendChild(defs);
+    const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
+    const neighborhoodClip = svgEl('clipPath', { id: 'neighborhood-grid-clip', clipPathUnits: 'userSpaceOnUse' });
     for (const b of level.map.blocks) {
-      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: b.x + b.width / 2, y1: b.y + 5, x2: b.x + b.width / 2, y2: b.y + b.height - 5 }));
-      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: b.x + 5, y1: b.y + b.height / 2, x2: b.x + b.width - 5, y2: b.y + b.height / 2 }));
+      neighborhoodClip.appendChild(svgEl('rect', { x: b.x, y: b.y, width: b.width, height: b.height }));
     }
-    svg.appendChild(lotsGroup);
+    defs.appendChild(neighborhoodClip);
+    lotsGroup.setAttribute('clip-path', 'url(#neighborhood-grid-clip)');
+    const map = level.map;
+    const step = map.cellSize;
+    // Complete underlying lattice, clipped to existing urban blocks.
+    // Streets cover it, including the lattice axes promoted to real roads.
+    for (let x = map.x[0] + step; x < map.x.at(-1) - 0.01; x += step) {
+      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: x, y1: map.y[0], x2: x, y2: map.y.at(-1) }));
+    }
+    for (let y = map.y[0] + step; y < map.y.at(-1) - 0.01; y += step) {
+      lotsGroup.appendChild(svgEl('line', { class: 'lot-line', x1: map.x[0], y1: y, x2: map.x.at(-1), y2: y }));
+    }
 
-    const roadsGroup = svgEl('g', { 'aria-hidden': 'true' });
+    const roadsGroup = svgEl('g', { id: 'roads', 'aria-hidden': 'true' });
     for (const s of level.map.roadSegments.filter((x) => x.enabled)) {
       roadsGroup.appendChild(svgEl('line', { class: 'road', 'data-street': s.streetKey, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
     }
-    svg.appendChild(roadsGroup);
 
     const housesGroup = svgEl('g', { id: 'housesGroup' });
     for (const h of level.map.houses) {
       const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': 'Casa' });
-      const r = svgEl('rect', { class: 'house-shape', x: h.rect.x, y: h.rect.y, width: h.rect.width, height: h.rect.height, rx: 2 });
+      const r = svgEl('rect', { class: 'house-shape', x: h.rect.x, y: h.rect.y, width: h.rect.width, height: h.rect.height, rx: 0 });
       g.appendChild(r);
 
       const toneHeight = Math.max(6, Math.min(10, h.rect.height * 0.1));
@@ -120,6 +133,9 @@ export class UI {
       housesGroup.appendChild(g);
     }
     svg.appendChild(housesGroup);
+    // Back to front: occupied lots, fine grid, then uninterrupted streets.
+    svg.appendChild(lotsGroup);
+    svg.appendChild(roadsGroup);
   }
 
   getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
@@ -151,6 +167,10 @@ export class UI {
       this.el.app.dataset.phase = g.theme;
     }
 
+    const phase = this.el.app.dataset.phase;
+    document.documentElement.dataset.theme = phase === 'night' ? 'dark' : phase === 'sunset' ? 'sunset' : 'light';
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     const candidates = g.level ? getConsistentCandidates(g.level, g.observations) : [];
     for (const house of g.level?.map.houses || []) {
       const el = this.getHouseEl(house.id);
@@ -204,7 +224,7 @@ export class UI {
         const lines = this.el.board.querySelectorAll(`.road[data-street="${key}"]`);
         for (const line of lines) {
           line.dataset.oldStroke = line.style.stroke || '';
-          line.style.stroke = '#4b83ff';
+          line.style.stroke = 'var(--focus)';
           line.style.strokeWidth = '13';
           this.streetHighlightEls.push(line);
         }
@@ -323,7 +343,7 @@ export class UI {
       `REDUNDANCIA  ${metrics.redundancyScore}`,
       `FAMILIAS DE PISTAS  dirección ${metrics.clueFamilyCounts?.direction || 0} · calle ${metrics.clueFamilyCounts?.street || 0} · distancia ${metrics.clueFamilyCounts?.distance || 0}`,
       `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
-      `TRAMA  ${level.map.cols}×${level.map.rows} · irregularidad ${Math.round((level.profile.spacingJitter || 0) * 100)}%`,
+      `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
       '',
       `ESTADO ACTUAL`,
       `interrogatorios: ${this.game.observations.length}`,

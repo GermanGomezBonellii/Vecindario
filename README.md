@@ -105,3 +105,11 @@ Cuando un testimonio dice, por ejemplo, `Está a 3 cuadras o menos de acá`, el 
 ## Variación progresiva de calles
 
 A partir del nivel 3 el generador puede retirar una cuadra completa entre dos cruces interiores. Cada interrupción deja dos intersecciones en T reales: no hay líneas truncadas por dibujo, cortes en bordes ni segmentos muertos pequeños. El render usa remates redondeados y consistentes para que los finales se lean limpios. También varía gradualmente el ancho/alto de las manzanas. En niveles 8–9 aumenta además el tamaño de la trama, por lo que la diferencia respecto del nivel 1 ya debe ser evidente.
+
+## Geometría del barrio
+
+El mapa usa una retícula fina de lotes cuadrados. Las calles se ubican en coordenadas enteras de esa retícula: las manzanas pueden ser 1×2, 2×2 o 3×2 (2, 4 y 6 lotes). Cada casa ocupa un lote cuadrado; sólo sus lados exteriores en contacto con un segmento activo cuentan como frente de calle. El SVG aplica `preserveAspectRatio` para ajustar todo el barrio con una escala uniforme.
+
+Las capas se dibujan en este orden: relleno de casas/lotes, retícula gris y calles negras por encima. Las casas rellenan exactamente su lote, sin margen interior ni esquinas redondeadas, y nunca tapan las calles. La retícula se recorta a la unión de las manzanas existentes: no aparece en huecos externos. Desde el nivel 3 pueden faltar manzanas completas.
+
+Para regenerar el ejecutable: `node build.cjs`. Para comprobar geometría, frentes, pistas, determinismo y generación en niveles 1, 3, 5, 8, 12 y 20: `node verify-geometry.cjs`. Una seed reconstruye la misma partida dentro de esta versión; la refactorización cambia los mapas de versiones anteriores.

@@ -6,19 +6,19 @@ import { getConsistentCandidates, isUniqueSolution, findMinimumSolvingSubsets, c
 
 export function getLevelProfile(levelNumber = 1) {
   const n = Math.max(1, Math.floor(Number(levelNumber) || 1));
-  if (n === 1) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 2, maxQuestions: 4, clueCandidateFraction: 0.50, streetBreaks: 0, spacingJitter: 0 };
-  if (n === 2) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 4, clueCandidateFraction: 0.55, streetBreaks: 0, spacingJitter: 0.04 };
-  if (n === 3) return { levelNumber: n, houseCount: 9, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.57, streetBreaks: 1, spacingJitter: 0.08 };
-  if (n === 4) return { levelNumber: n, houseCount: 10, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.60, streetBreaks: 1, spacingJitter: 0.12 };
-  if (n === 5) return { levelNumber: n, houseCount: 10, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.62, streetBreaks: 2, spacingJitter: 0.15 };
-  if (n === 6) return { levelNumber: n, houseCount: 11, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.64, streetBreaks: 2, spacingJitter: 0.18 };
-  if (n === 7) return { levelNumber: n, houseCount: 12, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.66, streetBreaks: 3, spacingJitter: 0.20 };
-  if (n === 8) return { levelNumber: n, houseCount: 12, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.67, streetBreaks: 3, spacingJitter: 0.22 };
-  if (n === 9) return { levelNumber: n, houseCount: 13, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.68, streetBreaks: 4, spacingJitter: 0.24 };
+  if (n === 1) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 2, maxQuestions: 4, clueCandidateFraction: 0.50, streetBreaks: 0, missingBlocks: 0 };
+  if (n === 2) return { levelNumber: n, houseCount: 8, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 4, clueCandidateFraction: 0.55, streetBreaks: 0, missingBlocks: 0 };
+  if (n === 3) return { levelNumber: n, houseCount: 9, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.57, streetBreaks: 1, missingBlocks: 1 };
+  if (n === 4) return { levelNumber: n, houseCount: 10, cols: 4, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.60, streetBreaks: 1, missingBlocks: 1 };
+  if (n === 5) return { levelNumber: n, houseCount: 10, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 5, clueCandidateFraction: 0.62, streetBreaks: 2, missingBlocks: 1 };
+  if (n === 6) return { levelNumber: n, houseCount: 11, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.64, streetBreaks: 2, missingBlocks: 2 };
+  if (n === 7) return { levelNumber: n, houseCount: 12, cols: 5, rows: 3, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.66, streetBreaks: 3, missingBlocks: 2 };
+  if (n === 8) return { levelNumber: n, houseCount: 12, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 6, clueCandidateFraction: 0.67, streetBreaks: 3, missingBlocks: 2 };
+  if (n === 9) return { levelNumber: n, houseCount: 13, cols: 5, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.68, streetBreaks: 4, missingBlocks: 2 };
   const houseCount = Math.min(16, 13 + Math.floor((n - 9) / 2));
   const cols = n >= 12 ? 6 : 5;
   const streetBreaks = Math.min(7, 4 + Math.floor((n - 9) / 2));
-  return { levelNumber: n, houseCount, cols, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.69, streetBreaks, spacingJitter: Math.min(0.34, 0.24 + (n - 9) * 0.012) };
+  return { levelNumber: n, houseCount, cols, rows: 4, minQuestions: 3, maxQuestions: 7, clueCandidateFraction: 0.69, streetBreaks, missingBlocks: Math.min(3, 2 + Math.floor((n - 9) / 4)) };
 }
 
 function singleObservationCandidates(level, speakerId, clue) {
@@ -167,7 +167,7 @@ export function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
       levelNumber: profile.levelNumber,
       profile,
       timed,
-      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, spacingJitter: profile.spacingJitter }),
+      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks }),
       murdererId: null,
       startHour: CONFIG.START_HOUR,
       generationAttempt: attempt + 1,
