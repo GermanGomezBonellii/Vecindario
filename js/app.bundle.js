@@ -1460,6 +1460,17 @@ class UI {
   }
 
   bind() {
+    const languageControl=document.querySelector('.language-switch');
+    document.querySelectorAll('.modal').forEach(modal=>{
+      const header=document.createElement('div');
+      header.className='modal-header';
+      const label=modal.classList.contains('end-modal') ? modal.querySelector('h2') : modal.querySelector('.eyebrow');
+      const control=languageControl.cloneNode(true);
+      control.classList.add('modal-language');
+      if(label) header.appendChild(label);
+      header.appendChild(control);
+      modal.prepend(header);
+    });
     applyCopy(document);
     document.documentElement.lang=getLanguage();
     document.querySelectorAll('[data-language]').forEach(btn=>btn.addEventListener('click',()=>this.changeLanguage(btn.dataset.language)));
@@ -1633,6 +1644,16 @@ class UI {
     this.el.hintBtn.disabled = g.hintUsed || g.finished;
 
     this.updateDebug();
+  }
+
+  changeLanguage(language) {
+    setLanguage(language);
+    applyCopy(document);
+    this.renderPrompt();
+    this.refresh();
+    document.querySelectorAll('[data-language]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.language===getLanguage())));
+    if (!this.el.endModal.hidden && this.endResult) this.showEnd(this.endResult);
+    this.renderBatch();
   }
 
   setPrompt(key, clue = null) {

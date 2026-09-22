@@ -45,8 +45,20 @@ body.modal-open { overflow: hidden; }
 .language-switch { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 10px; padding: 2px; color: var(--muted); background: var(--surface); }
 .language-switch button { border: 0; border-radius: 7px; padding: 8px 6px; min-height: 36px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; }
 .language-switch button[aria-pressed="true"] { color: var(--surface); background: var(--ink); font-weight: 800; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.modal-header > .eyebrow { min-width: 0; }
+.modal-header > h2 { margin: 0; flex: 1; min-width: 0; }
+.modal-language { margin-left: auto; gap: 0; padding: 3px; border: 0; border-radius: 9px; background: color-mix(in srgb, var(--ink) 6%, var(--surface)); }
+.modal-language > span { display: none; }
+.modal-language button { min-width: 38px; min-height: 36px; padding: 7px 8px; font-size: 11px; letter-spacing: .04em; border-radius: 6px; }
+.modal-language button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 16%, transparent); }
+.modal-language button:hover { color: var(--ink); }
+@media (max-width: 520px) {
+  .end-modal .modal-header { flex-wrap: wrap; gap: 10px; }
+  .end-modal .modal-header h2 { flex-basis: 180px; }
+}
 .statusbar { flex-wrap: wrap; }
-.end-stats strong { overflow-wrap: anywhere; }
+.end-stats strong { overflow-wrap: normal; word-break: normal; hyphens: none; }
 @media (max-width: 600px) {
   .topbar { flex-wrap: wrap; }
   .statusbar { width: 100%; justify-content: flex-start; }
@@ -180,6 +192,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .modal-backdrop[hidden] { display: none; }
 .modal { position: relative; z-index: 1; pointer-events: auto; width: min(560px, 100%); background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: 0 35px 100px rgba(0,0,0,.25); border-radius: 22px; padding: clamp(20px, 4vw, 30px); }
 .modal.compact { width: min(430px,100%); }
+.end-modal { width: min(760px, 100%); }
 .modal h2 { margin: 8px 0 8px; font-size: clamp(28px, 5vw, 48px); line-height: .98; letter-spacing: -.05em; }
 .modal.compact h2 { font-size: 32px; }
 .start-modal h2 { font-size: clamp(19px, 4.5vw, 30px); letter-spacing: -.035em; }
@@ -246,7 +259,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   .mode-options { grid-template-columns: 1fr; }
   .modal-actions.stacked-mobile { flex-direction: column-reverse; }
   .modal-actions.stacked-mobile button { width: 100%; }
-  .end-stats { grid-template-columns: 1fr 1fr 1fr; }
+  .end-stats { grid-template-columns: 1fr; }
 }
 
 /* Visualización temporal de pistas de distancia. Se inserta debajo de las casas y no captura input. */
