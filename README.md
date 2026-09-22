@@ -36,8 +36,8 @@ La mecánica futura de horario sigue disponible únicamente en la demo debug. En
 Las casas interrogadas ya no usan el círculo celeste. El estado de interrogatorio se integra dentro del bloque mediante una franja/subtono del mismo color:
 
 - celeste + subtono celeste si sólo fue interrogada;
-- naranja + subtono naranja si está marcada como sospechosa;
-- verde + subtono verde si está descartada.
+- amarillo + subtono amarillo si está marcada como sospechosa;
+- naranja + subtono naranja si está descartada.
 
 ## GitHub Pages
 
@@ -111,6 +111,10 @@ A partir del nivel 3 el generador puede retirar una cuadra completa entre dos cr
 ## Geometría del barrio
 
 El mapa usa una retícula fina de lotes cuadrados. Las calles se ubican en coordenadas enteras de esa retícula: las manzanas tienen dimensiones variables y permiten casas rectangulares de 1×1, 1×2, 2×1, 1×3, 3×1, 1×4, 4×1 y 2×2. Sólo los lados exteriores reales de cada casa en contacto con un segmento activo cuentan como frente de calle. El SVG aplica `preserveAspectRatio` para ajustar todo el barrio con una escala uniforme.
+
+Las calzadas llevan una línea cortada en el centro, del color del suelo, calculada por tramo para que cada uno empiece y termine con un espacio y los cruces queden limpios. Su grosor y el de la calle van en unidades del tablero, no en píxeles: la calle se achica junto con el barrio y conserva su proporción con el lote en cualquier pantalla. Cada casa muestra además su puerta: una abertura de un cuarto de lote de ancho por medio lote de fondo —un octavo de lote de superficie— centrada sobre el lado por el que la casa da a la calle (ver `PUERTAS.md`).
+
+Cuando un testimonio hace referencia a una calle, el resaltado se dibuja como una copia exacta del trazo de esa calzada: mismo ancho, mismo remate, misma geometría. Por eso no puede sobresalir de los extremos ni de los cruces, y ocupa exactamente los mismos píxeles que la calle. Las copias se insertan encima de todas las calzadas y debajo de la línea cortada, así la calle resaltada se lee continua al cruzar otras.
 
 Las capas se dibujan en este orden: relleno de casas/lotes, retícula gris y calles negras por encima. Las casas rellenan exactamente sus celdas, sin margen interior ni esquinas redondeadas, y nunca tapan las calles. Una máscara elimina la retícula del interior de cada casa para que se vea como un único bloque continuo. La retícula se recorta a la unión de las manzanas existentes: no aparece en huecos externos. Desde el nivel 3 pueden faltar manzanas completas.
 

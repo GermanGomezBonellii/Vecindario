@@ -20,6 +20,9 @@ const CONFIG = {
   WRONG_ACCUSATION_COST: 300,
   STARTING_LIVES: 3,
   LIFE_COST: 3000,
+  THEME_COST: 10000,
+  COASTAL_COST: 20000,
+  AVENUE_COST: 15000,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -46,6 +49,26 @@ const CONFIG = {
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
 };
+
+// Catálogo de ambientes. `cost: 0` significa disponible desde el principio.
+// El orden define el ciclo del botón AMBIENTE de la barra superior.
+// Versión del catálogo. Al cambiarla, los desbloqueos guardados por un catálogo
+// anterior dejan de contar: la tienda se rearmó y sus compras no se heredan.
+const UNLOCK_NAMESPACE = 'vecindario.unlock.2.';
+
+const THEMES = [
+  { id: 'day', cost: 0, swatch: '#f7f7f3' },
+  { id: 'night', cost: 0, swatch: '#171a1f' },
+  { id: 'sunset', cost: CONFIG.SUNSET_COST, swatch: '#e99853' },
+  { id: 'forest', cost: CONFIG.THEME_COST, swatch: '#1d3326' },
+  { id: 'midnight', cost: CONFIG.THEME_COST, swatch: '#16255c' },
+  { id: 'cherry', cost: CONFIG.THEME_COST, swatch: '#d9647d' },
+];
+
+const THEME_IDS = THEMES.map((theme) => theme.id);
+const FREE_THEME_IDS = THEMES.filter((theme) => theme.cost === 0).map((theme) => theme.id);
+function themeById(id) { return THEMES.find((theme) => theme.id === id) || null; }
+function themeCost(id) { return themeById(id)?.cost ?? 0; }
 
 // ---- copy.js ----
 // Presentation only. Never pass game state or the procedural RNG to this picker.
@@ -85,10 +108,14 @@ const englishCopy = {
   actions:{interrogate:'Question',suspect:'Suspect',unmark:'Remove mark',clear:'Rule out',unclear:'Undo rule out',accuse:'Accuse',help:'Ask for help'},
 };
 
-spanishCopy.labels={level:'NIVEL',points:'PUNTOS',lives:'VIDAS',environment:'AMBIENTE',hour:'HORA',light:'☼ CLARO',night:'☾ NOCHE',logic:'LÓGICA',investigation:'INVESTIGACIÓN',selected:'CASA SELECCIONADA',none:'NINGUNA',unavailable:'NO DISPONIBLE',asked:'INTERROGADA',suspect:'SOSPECHOSA',cleared:'DESCARTADA',chosen:'SELECCIONADA',unaskedLegend:'Sin interrogar',askedLegend:'Interrogado',suspectLegend:'Sospechoso',clearedLegend:'Descartado',accusation:'ACUSACIÓN',questions:'Interrogatorios',remainingLives:'Vidas restantes',west:'O',debug:'LÓGICA DE SEED',spoilers:'DESARROLLO / SPOILERS',batch:'GENERAR 100 NIVELES',demo:'DEMO NOCHE'};
-englishCopy.labels={level:'LEVEL',points:'POINTS',lives:'LIVES',environment:'THEME',hour:'TIME',light:'☼ LIGHT',night:'☾ NIGHT',logic:'LOGIC',investigation:'INVESTIGATION',selected:'SELECTED HOUSE',none:'NONE',unavailable:'UNAVAILABLE',asked:'QUESTIONED',suspect:'SUSPECT',cleared:'RULED OUT',chosen:'SELECTED',unaskedLegend:'Not questioned',askedLegend:'Questioned',suspectLegend:'Suspect',clearedLegend:'Ruled out',accusation:'ACCUSATION',questions:'Questions',remainingLives:'Lives remaining',west:'W',debug:'SEED LOGIC',spoilers:'DEVELOPMENT / SPOILERS',batch:'GENERATE 100 LEVELS',demo:'NIGHT DEMO'};
+spanishCopy.labels={level:'NIVEL',points:'PUNTOS',lives:'VIDAS',environment:'AMBIENTE',hour:'HORA',light:'☼ CLARO',night:'☾ NOCHE',logic:'LÓGICA',investigation:'INVESTIGACIÓN',selected:'CASA SELECCIONADA',none:'NINGUNA',unavailable:'NO DISPONIBLE',asked:'INTERROGADA',suspect:'SOSPECHOSA',cleared:'DESCARTADA',chosen:'SELECCIONADA',unaskedLegend:'Sin interrogar',askedLegend:'Interrogado',suspectLegend:'Sospechoso',clearedLegend:'Descartado',accusation:'ACUSACIÓN',questions:'Interrogatorios',remainingLives:'Vidas restantes',west:'O',debug:'LÓGICA DE SEED',spoilers:'DESARROLLO / SPOILERS',batch:'GENERAR 100 NIVELES',demo:'DEMO NOCHE',resetUnlocks:'REINICIAR DESBLOQUEOS'};
+englishCopy.labels={level:'LEVEL',points:'POINTS',lives:'LIVES',environment:'THEME',hour:'TIME',light:'☼ LIGHT',night:'☾ NIGHT',logic:'LOGIC',investigation:'INVESTIGATION',selected:'SELECTED HOUSE',none:'NONE',unavailable:'UNAVAILABLE',asked:'QUESTIONED',suspect:'SUSPECT',cleared:'RULED OUT',chosen:'SELECTED',unaskedLegend:'Not questioned',askedLegend:'Questioned',suspectLegend:'Suspect',clearedLegend:'Ruled out',accusation:'ACCUSATION',questions:'Questions',remainingLives:'Lives remaining',west:'W',debug:'SEED LOGIC',spoilers:'DEVELOPMENT / SPOILERS',batch:'GENERATE 100 LEVELS',demo:'NIGHT DEMO',resetUnlocks:'RESET UNLOCKS'};
 spanishCopy.aria={status:'Estado de la partida',light:'Cambiar a modo claro',night:'Cambiar a modo nocturno',logic:'Abrir panel lógico',sound:'Activar o desactivar sonido',board:'Barrio',map:'Mapa del barrio',compass:'Brújula',panel:'Panel de investigación',actions:'Acciones',legend:'Leyenda',close:'Cerrar panel lógico',house:'Casa',time:'Hora de la investigación',language:'Idioma',es:'Cambiar a español',en:'Cambiar a inglés'};
 englishCopy.aria={status:'Game status',light:'Switch to light mode',night:'Switch to night mode',logic:'Open logic panel',sound:'Toggle sound',board:'Neighborhood',map:'Neighborhood map',compass:'Compass',panel:'Investigation panel',actions:'Actions',legend:'Legend',close:'Close logic panel',house:'House',time:'Investigation time',language:'Language',es:'Switch to Spanish',en:'Switch to English'};
+spanishCopy.coast={left:'oeste',right:'este'};
+englishCopy.coast={left:'west',right:'east'};
+spanishCopy.compass={N:'N',S:'S',E:'E',W:'O'};
+englishCopy.compass={N:'N',S:'S',E:'E',W:'W'};
 spanishCopy.units={question:['interrogatorio','interrogatorios'],life:['vida','vidas'],point:['punto','puntos'],block:['cuadra','cuadras']};
 englishCopy.units={question:['question','questions'],life:['life','lives'],point:['point','points'],block:['block','blocks']};
 spanishCopy.error={title:'No se pudo abrir el barrio.',retry:'Probá recargar la página.'};
@@ -100,10 +127,26 @@ spanishCopy.defeat.text='No te quedan vidas.';
 englishCopy.defeat.text="You have no lives left.";
 spanishCopy.lifePurchase={full:'Ya tenés todas las vidas.',poor:'Necesitás 3000 puntos.',ready:'Comprá una vida por 3000 puntos.'};
 englishCopy.lifePurchase={full:'Your lives are full.',poor:'You need 3000 points.',ready:'Buy one life for 3000 points.'};
-spanishCopy.shop={visit:'TIENDA Y CONTINUAR',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',sunset:'Atardecer',sunsetHelp:'Un fondo naranja cálido para recorrer el barrio.',buy:'Desbloquear',owned:'Desbloqueado',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saved:'Atardecer ya es tuyo. Elegí el ambiente que prefieras.',saveMore:'Podés seguir ahorrando: Atardecer cuesta 10.000 puntos.',themes:'AMBIENTE',day:'Claro',night:'Oscuro',continue:'SIGUIENTE BARRIO',cycle:'Cambiar ambiente: claro, oscuro o atardecer desbloqueado',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.'};
-englishCopy.shop={visit:'SHOP AND CONTINUE',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',sunset:'Sunset',sunsetHelp:'A warm orange backdrop for your investigation.',buy:'Unlock',owned:'Unlocked',permanent:'A permanent purchase. Switch themes whenever you like.',saved:'Sunset is yours. Choose whichever theme you prefer.',saveMore:'Keep saving: Sunset costs 10,000 points.',themes:'THEME',day:'Light',night:'Dark',continue:'NEXT NEIGHBORHOOD',cycle:'Change theme: light, dark or unlocked sunset',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.'};
+spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'Algunos barrios terminan contra el mar, con una calle que desemboca en la costa.',avenue:'Avenida con boulevard',avenueHelp:'Una calle importante se convierte en doble calzada, con una franja verde en el medio.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar'};
+englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'Some neighborhoods end at the sea, with one street running down to the shore.',avenue:'Boulevard Avenue',avenueHelp:'One major street becomes a dual carriageway with a green strip down the middle.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off'};
+spanishCopy.themes={
+  day:{name:'Claro',short:'\u263c CLARO',help:'El barrio a plena luz. Siempre disponible.'},
+  night:{name:'Oscuro',short:'\u263e OSCURO',help:'Tinta clara sobre fondo profundo. Siempre disponible.'},
+  sunset:{name:'Atardecer',short:'\u25d0 ATARDECER',help:'Naranja cálido sobre todo el barrio: fondo, calles y casas.'},
+  forest:{name:'Bosque',short:'\u25b2 BOSQUE',help:'Verdes húmedos y calles claras entre las manzanas.'},
+  midnight:{name:'Azul noche',short:'\u2605 AZUL NOCHE',help:'Azul profundo, como el barrio mucho después de la medianoche.'},
+  cherry:{name:'Cerezo',short:'\u2740 CEREZO',help:'Rojos y rosas de cerezo, con las calles casi negras.'},
+};
+englishCopy.themes={
+  day:{name:'Light',short:'\u263c LIGHT',help:'The neighborhood in full daylight. Always available.'},
+  night:{name:'Dark',short:'\u263e DARK',help:'Light ink on a deep backdrop. Always available.'},
+  sunset:{name:'Sunset',short:'\u25d0 SUNSET',help:'Warm orange across the whole neighborhood: backdrop, streets and houses.'},
+  forest:{name:'Forest',short:'\u25b2 FOREST',help:'Damp greens with pale streets between the blocks.'},
+  midnight:{name:'Midnight blue',short:'\u2605 MIDNIGHT',help:'Deep blue, the neighborhood long past midnight.'},
+  cherry:{name:'Cherry blossom',short:'\u2740 CHERRY',help:'Cherry reds and blossom pinks, with near-black streets.'},
+};
 const debugWords={
-  seed:['SEED','SEED'],level:['NIVEL','LEVEL'],houses:['casas','houses'],murderer:['ASESINO REAL','ACTUAL MURDERER'],minimum:['PREGUNTAS MÍNIMAS','MINIMUM QUESTIONS'],sets:['CONJUNTOS MÍNIMOS POSIBLES','MINIMUM SOLVING SETS'],single:['REGLA: UNA PISTA NO RESUELVE','RULE: ONE CLUE CANNOT SOLVE'],reduction:['REDUCCIÓN MEDIA POR PISTA','AVERAGE REDUCTION PER CLUE'],redundancy:['REDUNDANCIA','REDUNDANCY'],families:['DISTRIBUCIÓN DE FAMILIAS','CLUE FAMILY DISTRIBUTION'],minFamilies:['FAMILIAS EN SOLUCIONES MÍNIMAS','FAMILIES IN MINIMUM SOLUTIONS'],compound:['COMPUESTAS','COMPOUND CLUES'],complexity:['COMPLEJIDAD MEDIA','AVERAGE COMPLEXITY'],areas:['ÁREAS DE CASAS','HOUSE AREAS'],sizes:['TAMAÑOS','SIZES'],lots:['lotes','lots'],properties:['PROPIEDADES GEOMÉTRICAS','GEOMETRIC PROPERTIES'],unique:['ÚNICA','UNIQUE'],uniqueProperties:['PROPIEDADES ÚNICAS','UNIQUE PROPERTIES'],warnings:['ALERTAS VISUALES','VISUAL WARNINGS'],none:['ninguna','none'],breaks:['TRAMOS INTERRUMPIDOS','MISSING STREET SEGMENTS'],grid:['TRAMA','GRID'],missing:['manzanas ausentes','missing blocks'],current:['ESTADO ACTUAL','CURRENT STATE'],questions:['interrogatorios','questions'],candidates:['CANDIDATOS ACTUALES','CURRENT CANDIDATES'],examples:['EJEMPLOS DE CONJUNTOS MÍNIMOS (HASTA 6)','MINIMUM SET EXAMPLES (UP TO 6)'],houseInfo:['INFORMACIÓN POR CASA','INFORMATION BY HOUSE'],lie:['MENTIRA','LIE'],truth:['VERDAD','TRUTH'],asked:['interrogada','questioned'],family:['familia','family'],predicate:['predicado','predicate'],inMinimum:['en conjunto mínimo','in minimum set'],yes:['sí','yes'],no:['no','no'],house:['casa','house'],area:['área','area'],fronts:['frentes','street-facing sides'],alone:['sola deja','alone leaves'],reduces:['reduce','reduces'],information:['información','information'],validating:['Validando…','Validating…'],tests:['pruebas internas','internal tests'],generated:['generados','generated'],valid:['válidos','valid'],invalid:['inválidos','invalid'],failed:['seeds fallidas','failed seeds'],reasons:['motivos','reasons'],
+  seed:['SEED','SEED'],level:['NIVEL','LEVEL'],houses:['casas','houses'],murderer:['ASESINO REAL','ACTUAL MURDERER'],minimum:['PREGUNTAS MÍNIMAS','MINIMUM QUESTIONS'],sets:['CONJUNTOS MÍNIMOS POSIBLES','MINIMUM SOLVING SETS'],single:['REGLA: UNA PISTA NO RESUELVE','RULE: ONE CLUE CANNOT SOLVE'],reduction:['REDUCCIÓN MEDIA POR PISTA','AVERAGE REDUCTION PER CLUE'],redundancy:['REDUNDANCIA','REDUNDANCY'],families:['DISTRIBUCIÓN DE FAMILIAS','CLUE FAMILY DISTRIBUTION'],minFamilies:['FAMILIAS EN SOLUCIONES MÍNIMAS','FAMILIES IN MINIMUM SOLUTIONS'],compound:['COMPUESTAS','COMPOUND CLUES'],complexity:['COMPLEJIDAD MEDIA','AVERAGE COMPLEXITY'],areas:['ÁREAS DE CASAS','HOUSE AREAS'],sizes:['TAMAÑOS','SIZES'],lots:['lotes','lots'],properties:['PROPIEDADES GEOMÉTRICAS','GEOMETRIC PROPERTIES'],unique:['ÚNICA','UNIQUE'],uniqueProperties:['PROPIEDADES ÚNICAS','UNIQUE PROPERTIES'],warnings:['ALERTAS VISUALES','VISUAL WARNINGS'],none:['ninguna','none'],breaks:['TRAMOS INTERRUMPIDOS','MISSING STREET SEGMENTS'],grid:['TRAMA','GRID'],missing:['manzanas ausentes','missing blocks'],current:['ESTADO ACTUAL','CURRENT STATE'],questions:['interrogatorios','questions'],candidates:['CANDIDATOS ACTUALES','CURRENT CANDIDATES'],examples:['EJEMPLOS DE CONJUNTOS MÍNIMOS (HASTA 6)','MINIMUM SET EXAMPLES (UP TO 6)'],houseInfo:['INFORMACIÓN POR CASA','INFORMATION BY HOUSE'],lie:['MENTIRA','LIE'],truth:['VERDAD','TRUTH'],asked:['interrogada','questioned'],family:['familia','family'],predicate:['predicado','predicate'],inMinimum:['en conjunto mínimo','in minimum set'],yes:['sí','yes'],no:['no','no'],house:['casa','house'],area:['área','area'],fronts:['frentes','street-facing sides'],alone:['sola deja','alone leaves'],reduces:['reduce','reduces'],information:['información','information'],validating:['Validando…','Validating…'],tests:['pruebas internas','internal tests'],generated:['generados','generated'],valid:['válidos','valid'],invalid:['inválidos','invalid'],failed:['seeds fallidas','failed seeds'],reasons:['motivos','reasons'],door:['puerta','door'],doors:['ORIENTACIÓN DE LAS PUERTAS','DOOR ORIENTATION'],forced:['sin elección','forced'],coast:['COSTA','COAST'],avenue:['AVENIDA','AVENUE'],horizontal:['horizontal','horizontal'],vertical:['vertical','vertical'],crossesCity:['atraviesa el barrio','crosses the city'],outerBorder:['borde exterior','outer border'],graphIntact:['grafo lógico intacto','logic graph intact'],noAvenue:['ninguna calle elegible: no hay calle continua que atraviese el barrio ni recorra su contorno','no eligible street: no continuous street crosses the city or follows its outline'],pier:['calle al mar','street to the sea'],
 };
 spanishCopy.debug=Object.fromEntries(Object.entries(debugWords).map(([k,v])=>[k,v[0]]));
 englishCopy.debug=Object.fromEntries(Object.entries(debugWords).map(([k,v])=>[k,v[1]]));
@@ -397,6 +440,17 @@ function validateStreetTopology(map) {
     const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
     const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
     if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    const doorStreetKey = house.doorSide && sideStreetKey(block, house.doorSide);
+    if(!actualSides.includes(house.doorSide) || doorStreetKey!==house.primaryStreetKey || house.doorFacing!==DOOR_FACING[house.doorSide]) return {valid:false,reason:'invalid_door_side'};
+    const door = doorSegment(house.rect, house.doorSide, map.cellSize);
+    if(['x1','y1','x2','y2'].some(k=>Math.abs(house.door[k]-door[k])>0.001)) return {valid:false,reason:'invalid_door_geometry'};
+    const doorLength = Math.hypot(door.x2-door.x1, door.y2-door.y1);
+    if(Math.abs(doorLength - map.cellSize*DOOR_WIDTH_RATIO)>0.001) return {valid:false,reason:'invalid_door_length'};
+    // Un octavo de lote de superficie, y nunca pegada a una esquina del muro.
+    const drawn = doorRect(house, map.cellSize);
+    if(Math.abs(drawn.width*drawn.height - map.cellSize*map.cellSize/8)>0.001) return {valid:false,reason:'invalid_door_area'};
+    const wall = (house.doorSide==='top'||house.doorSide==='bottom') ? house.rect.width : house.rect.height;
+    if((wall - doorLength)/2 < map.cellSize*DOOR_MIN_MARGIN_RATIO - 0.001) return {valid:false,reason:'door_too_close_to_corner'};
     if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
   }
   for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
@@ -428,6 +482,227 @@ function sideStreetKey(block, side) {
   return vStreetKey(block.c + 1);
 }
 
+
+// ---------------------------------------------------------------------------
+// Ciudad costera. Capa puramente estética: se calcula a partir del mapa ya
+// generado y no toca los nodos, los segmentos ni el grafo que usan el solver y
+// los testimonios. El mar ocupa el margen que el tablero ya dejaba libre de ese
+// lado, así que ninguna casa puede quedar dentro del agua.
+const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
+const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
+const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
+
+function coastGeometry(map, side) {
+  if (side !== 'left' && side !== 'right') return null;
+  const shore = side === 'left' ? map.x[0] : map.x.at(-1);
+  const foamWidth = Math.max(10, map.cellSize * COAST_FOAM_RATIO);
+  const outer = side === 'left' ? -COAST_BLEED : map.width + COAST_BLEED;
+  const water = {
+    x: Math.min(outer, shore), y: -COAST_BLEED,
+    width: Math.abs(shore - outer), height: map.height + COAST_BLEED * 2,
+  };
+  const foam = {
+    x: side === 'left' ? shore - foamWidth : shore, y: water.y,
+    width: foamWidth, height: water.height,
+  };
+  return { side, shore, water, foam, pier: coastPier(map, side, shore) };
+}
+
+// Una calle del borde costero se prolonga hacia el mar. Es solamente un trazo:
+// no hay lotes ni casas sobre ese tramo y no entra en map.roadSegments, así que
+// las distancias y las pistas de calle siguen viendo el mismo barrio de siempre.
+function coastPier(map, side, shore) {
+  const column = side === 'left' ? 0 : map.cols - 1;
+  const rows = [];
+  for (let r = 0; r <= map.rows; r += 1) {
+    const segment = map.roadSegments.find((s) => s.enabled && s.orientation === 'H' && s.c === column && s.r === r);
+    if (segment) rows.push({ r, y: segment.y1, streetKey: segment.streetKey });
+  }
+  if (!rows.length) return null;
+  // La del medio: la que menos se confunde con el borde exterior del barrio.
+  const chosen = rows[Math.floor(rows.length / 2)];
+  const length = map.cellSize * COAST_PIER_RATIO;
+  return {
+    streetKey: chosen.streetKey,
+    y: chosen.y,
+    x1: shore,
+    x2: side === 'left' ? shore - length : shore + length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Avenida con boulevard. Igual que la costa: se deriva del mapa ya generado y no
+// toca nodos, segmentos ni grafo. La calle elegida conserva su identificador
+// lógico; las dos calzadas son dos trazos de la MISMA calle.
+const AVENUE_ROADWAY = 7;          // ancho de cada calzada
+const AVENUE_MEDIAN = 8;           // ancho del boulevard central
+const AVENUE_WIDTH = AVENUE_ROADWAY * 2 + AVENUE_MEDIAN;
+const ROAD_WIDTH = 13;             // espejo de .road en el CSS: la avenida tiene que encastrar con las calles
+
+// Un tramo es de contorno cuando tiene manzana de un solo lado.
+function borderSegment(map, segment, blockIds) {
+  const { c, r } = segment;
+  const pair = segment.orientation === 'H'
+    ? [`B${c}_${r - 1}`, `B${c}_${r}`]
+    : [`B${c - 1}_${r}`, `B${c}_${r}`];
+  return pair.filter((id) => blockIds.has(id)).length === 1;
+}
+
+function streetProfile(map, streetKey) {
+  const blockIds = new Set(map.blocks.map((b) => b.id));
+  const all = map.roadSegments.filter((s) => s.streetKey === streetKey);
+  const enabled = all.filter((s) => s.enabled);
+  if (!enabled.length) return null;
+  const ordinals = enabled.map((s) => s.segmentOrdinal).sort((a, b) => a - b);
+  // Sin huecos: los tramos activos tienen que ser consecutivos.
+  const contiguous = ordinals.every((o, i) => i === 0 || o === ordinals[i - 1] + 1);
+  // Atraviesa el barrio de un extremo al otro: ningún tramo de la calle falta.
+  const crosses = enabled.length === all.length;
+  const border = enabled.every((s) => borderSegment(map, s, blockIds));
+  const length = enabled.reduce((sum, s) => sum + Math.hypot(s.x2 - s.x1, s.y2 - s.y1), 0);
+  return { streetKey, orientation: enabled[0].orientation, segments: enabled, contiguous, crosses, border, length };
+}
+
+function avenueStreet(map, { exclude = [] } = {}) {
+  const keys = [...new Set(map.roadSegments.filter((s) => s.enabled).map((s) => s.streetKey))];
+  const candidates = keys
+    .filter((key) => !exclude.includes(key))
+    .map((key) => streetProfile(map, key))
+    .filter((p) => p && p.contiguous && p.segments.length >= 2 && (p.crosses || p.border));
+  if (!candidates.length) return null;
+  // Prioridad: atraviesa el barrio, después contorno exterior, después la más larga.
+  candidates.sort((a, b) => (Number(b.crosses) - Number(a.crosses))
+    || (Number(b.border) - Number(a.border))
+    || (b.length - a.length)
+    || a.streetKey.localeCompare(b.streetKey));
+  const chosen = candidates[0];
+  return { ...chosen, reason: chosen.crosses ? 'crosses' : 'border' };
+}
+
+// Geometría de dibujo. El asfalto es un único trazo continuo a lo ancho de toda la
+// avenida: sin uniones, no puede quedar ningún hueco. La franja verde se pinta
+// encima y se corta solamente donde hay una intersección real, es decir donde una
+// calle perpendicular llega a ese nodo. Las puntas llegan tan lejos como las de
+// cualquier calle del barrio (media calzada más allá del último nodo), ni más ni menos.
+function crossesAt(map, street, index) {
+  const horizontal = street.orientation === 'H';
+  const row = street.segments[0].r;
+  const column = street.segments[0].c;
+  return map.roadSegments.some((s) => s.enabled && (horizontal
+    ? s.orientation === 'V' && s.c === index && (s.r === row || s.r === row - 1)
+    : s.orientation === 'H' && s.r === index && (s.c === column || s.c === column - 1)));
+}
+
+function avenueGeometry(street, map) {
+  if (!street) return null;
+  const horizontal = street.orientation === 'H';
+  const half = ROAD_WIDTH / 2;
+  const axis = horizontal ? street.segments[0].y1 : street.segments[0].x1;
+  const at = (seg, n) => (horizontal ? seg[`x${n}`] : seg[`y${n}`]);
+
+  // Extensión total, con la misma prolongación que tiene cualquier calle en sus puntas.
+  const bounds = street.segments.flatMap((seg) => [at(seg, 1), at(seg, 2)]);
+  const from = Math.min(...bounds) - half;
+  const to = Math.max(...bounds) + half;
+  const asphalt = horizontal
+    ? { x1: from, y1: axis, x2: to, y2: axis }
+    : { x1: axis, y1: from, x2: axis, y2: to };
+
+  // Nodos de la calle y su posición; se corta solo en los que tienen calle cruzada.
+  const indices = new Set();
+  for (const seg of street.segments) {
+    const base = horizontal ? seg.c : seg.r;
+    indices.add(base);
+    indices.add(base + 1);
+  }
+  const axisPos = horizontal ? map.x : map.y;
+  const cuts = [...indices]
+    .filter((i) => crossesAt(map, street, i))
+    .map((i) => [Math.max(from, axisPos[i] - half), Math.min(to, axisPos[i] + half)])
+    .filter(([a, b]) => b > a)
+    .sort((a, b) => a[0] - b[0]);
+
+  // La franja verde ocupa todo lo que queda entre corte y corte, sin márgenes.
+  const medians = [];
+  let cursor = from;
+  for (const [a, b] of [...cuts, [to, to]]) {
+    if (a - cursor > 0.001) {
+      medians.push(horizontal
+        ? { x: cursor, y: axis - AVENUE_MEDIAN / 2, width: a - cursor, height: AVENUE_MEDIAN }
+        : { x: axis - AVENUE_MEDIAN / 2, y: cursor, width: AVENUE_MEDIAN, height: a - cursor });
+    }
+    cursor = Math.max(cursor, b);
+  }
+
+  // Ejes de cada calzada: sobre ellos va la línea discontinua, tramo por tramo.
+  const laneOffset = AVENUE_MEDIAN / 2 + AVENUE_ROADWAY / 2;
+  const laneLines = [];
+  for (const seg of street.segments) {
+    for (const sign of [-1, 1]) {
+      laneLines.push(horizontal
+        ? { x1: seg.x1, y1: seg.y1 + sign * laneOffset, x2: seg.x2, y2: seg.y2 + sign * laneOffset }
+        : { x1: seg.x1 + sign * laneOffset, y1: seg.y1, x2: seg.x2 + sign * laneOffset, y2: seg.y2 });
+    }
+  }
+
+  return { streetKey: street.streetKey, orientation: street.orientation, reason: street.reason, length: street.length, asphalt, medians, laneLines };
+}
+
+// Línea cortada del centro de la calzada. Todos los trazos del barrio miden lo
+// mismo: se calcula cuántos enteros entran en el tramo, dejando aire en las dos
+// puntas para que los cruces queden limpios, y se dibujan solo esos. Un trazo que
+// no entra completo no se dibuja, y un tramo demasiado corto se queda sin línea.
+const CENTER_DASH_RATIO = 0.2;
+const CENTER_GAP_RATIO = 0.26;
+const CENTER_MARGIN_RATIO = 0.16;
+
+function centerLineDashes(segment, cellSize) {
+  const dash = cellSize * CENTER_DASH_RATIO;
+  const gap = cellSize * CENTER_GAP_RATIO;
+  const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1);
+  const usable = length - cellSize * CENTER_MARGIN_RATIO * 2;
+  const count = Math.floor((usable + gap) / (dash + gap));
+  if (count < 1) return [];
+  const start = (length - (count * dash + (count - 1) * gap)) / 2;
+  const ux = (segment.x2 - segment.x1) / length;
+  const uy = (segment.y2 - segment.y1) / length;
+  return Array.from({ length: count }, (_, i) => {
+    const from = start + i * (dash + gap);
+    return {
+      x1: segment.x1 + ux * from, y1: segment.y1 + uy * from,
+      x2: segment.x1 + ux * (from + dash), y2: segment.y1 + uy * (from + dash),
+    };
+  });
+}
+
+// La puerta mide un octavo de lote: un cuarto de lote de ancho sobre el muro por
+// medio lote de profundidad hacia adentro de la casa. Va centrada sobre su muro,
+// que siempre deja al menos un cuarto de lote a cada costado (el muro más corto
+// posible mide un lote entero: (1 - 1/4) / 2 = 3/8 por lado).
+const DOOR_FACING = { top: 'N', bottom: 'S', left: 'W', right: 'E' };
+const DOOR_WIDTH_RATIO = 1 / 4;
+const DOOR_DEPTH_RATIO = 1 / 2;
+const DOOR_MIN_MARGIN_RATIO = 1 / 4;
+
+function doorSegment(rect, side, cellSize) {
+  const width = cellSize * DOOR_WIDTH_RATIO;
+  const midX = rect.x + rect.width / 2;
+  const midY = rect.y + rect.height / 2;
+  if (side === 'top') return { x1: midX - width / 2, y1: rect.y, x2: midX + width / 2, y2: rect.y };
+  if (side === 'bottom') return { x1: midX - width / 2, y1: rect.y + rect.height, x2: midX + width / 2, y2: rect.y + rect.height };
+  if (side === 'left') return { x1: rect.x, y1: midY - width / 2, x2: rect.x, y2: midY + width / 2 };
+  return { x1: rect.x + rect.width, y1: midY - width / 2, x2: rect.x + rect.width, y2: midY + width / 2 };
+}
+
+function doorRect(house, cellSize) {
+  const { rect, doorSide: side, door } = house;
+  const width = cellSize * DOOR_WIDTH_RATIO;
+  const depth = cellSize * DOOR_DEPTH_RATIO;
+  if (side === 'top') return { x: door.x1, y: rect.y, width, height: depth };
+  if (side === 'bottom') return { x: door.x1, y: rect.y + rect.height - depth, width, height: depth };
+  if (side === 'left') return { x: rect.x, y: door.y1, width: depth, height: width };
+  return { x: rect.x + rect.width - depth, y: door.y1, width: depth, height: width };
+}
 
 const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
@@ -536,6 +811,9 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
       freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
       rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
+      // El acceso a la calle ya existia: la puerta solo lo hace visible.
+      doorSide: access.side, doorFacing: DOOR_FACING[access.side],
+      door: doorSegment({ x: rx, y: ry, width: rw, height: rh }, access.side, cellSize),
       adjacentStreetKeys: [...new Set(candidateBorders.map((b) => b.streetKey))],
       asked: false, mark: null, confirmedInnocent: false,
     };
@@ -1140,10 +1418,12 @@ function batchValidate(count = 100, { timed = false, prefix = 'batch', levelNumb
 
 // ---- game.js ----
 
+const UNLOCK_PREFIX = UNLOCK_NAMESPACE;
+
 function safeGetTheme() {
   try {
     const saved = localStorage.getItem('vecindario-theme');
-    return ['day','night','sunset'].includes(saved) ? saved : 'day';
+    return THEME_IDS.includes(saved) ? saved : 'day';
   } catch (_) {
     return 'day';
   }
@@ -1151,6 +1431,39 @@ function safeGetTheme() {
 
 function safeSaveTheme(theme) {
   try { localStorage.setItem('vecindario-theme', theme); } catch (_) { /* file:// can block storage */ }
+}
+
+function safeReadUnlock(id) {
+  try { return localStorage.getItem(UNLOCK_PREFIX + id) === 'true'; } catch (_) { return false; }
+}
+
+const COASTAL_ID = 'coastal';
+const COASTAL_PREF = 'vecindario.style.coastal';
+const AVENUE_ID = 'avenue';
+const AVENUE_PREF = 'vecindario.style.avenue';
+
+function safeReadStyle(key) {
+  try { return localStorage.getItem(key) === 'true'; } catch (_) { return false; }
+}
+
+function safeSaveStyle(key, enabled) {
+  try { localStorage.setItem(key, String(enabled)); } catch (_) { /* file:// can block storage */ }
+}
+
+function safeSaveUnlock(id) {
+  try { localStorage.setItem(UNLOCK_PREFIX + id, 'true'); } catch (_) { /* file:// can block storage */ }
+}
+
+// Herramienta de desarrollo: deja la cuenta como la de alguien que nunca compró nada.
+function safeClearUnlocks() {
+  try {
+    for (const theme of THEMES) localStorage.removeItem(UNLOCK_PREFIX + theme.id);
+    localStorage.removeItem(UNLOCK_PREFIX + COASTAL_ID);
+    localStorage.removeItem(COASTAL_PREF);
+    localStorage.removeItem(UNLOCK_PREFIX + AVENUE_ID);
+    localStorage.removeItem(AVENUE_PREF);
+    localStorage.removeItem('vecindario-theme');
+  } catch (_) { /* file:// can block storage */ }
 }
 
 class Game {
@@ -1161,10 +1474,14 @@ class Game {
     this.debug = debug;
     this.pendingMode = 'normal';
     this.mode = 'normal';
-    this.sunsetUnlocked = false;
-    try { this.sunsetUnlocked=localStorage.getItem('vecindario.unlock.sunset')==='true'; } catch (_) {}
+    this.unlockedThemes = new Set(FREE_THEME_IDS);
+    for (const theme of THEMES) if (theme.cost > 0 && safeReadUnlock(theme.id)) this.unlockedThemes.add(theme.id);
     this.theme = safeGetTheme();
-    if(this.theme==='sunset' && !this.sunsetUnlocked) this.theme='day';
+    if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
+    this.coastalUnlocked = safeReadUnlock(COASTAL_ID);
+    this.coastalEnabled = this.coastalUnlocked && safeReadStyle(COASTAL_PREF);
+    this.avenueUnlocked = safeReadUnlock(AVENUE_ID);
+    this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
     this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
@@ -1180,6 +1497,12 @@ class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
+    // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
+    // caso con costa o sin ella.
+    this.level.coastSide = this.coastalEnabled ? (createRng(`${seed}|coast`)() < 0.5 ? 'left' : 'right') : null;
+    // La avenida no necesita azar: sale de la geometría, así que la misma seed con
+    // la misma configuración elige siempre la misma calle.
+    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { exclude: this.avenueExclusions() }) : null;
     this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
@@ -1335,7 +1658,18 @@ class Game {
     this.selectTheme(themes[(themes.indexOf(this.theme)+1)%themes.length]);
   }
 
-  availableThemes() { return this.sunsetUnlocked ? ['day','night','sunset'] : ['day','night']; }
+  availableThemes() { return THEME_IDS.filter((id) => this.unlockedThemes.has(id)); }
+
+  isThemeUnlocked(id) { return this.unlockedThemes.has(id); }
+
+  // Compatibilidad con la primera versión de la tienda.
+  get sunsetUnlocked() { return this.unlockedThemes.has('sunset'); }
+
+  canBuyTheme(id) {
+    const theme = themeById(id);
+    return Boolean(theme && theme.cost > 0 && this.shopOpen && this.lastOutcomeWon
+      && !this.unlockedThemes.has(id) && this.score >= theme.cost);
+  }
 
   selectTheme(theme) {
     if ((this.level?.timed && !this.shopOpen) || !this.availableThemes().includes(theme)) return false;
@@ -1345,13 +1679,84 @@ class Game {
     return true;
   }
 
-  buySunset() {
-    if (!this.shopOpen || !this.lastOutcomeWon || this.sunsetUnlocked || this.score<CONFIG.SUNSET_COST) return false;
-    this.score-=CONFIG.SUNSET_COST;
-    this.sunsetUnlocked=true;
-    try { localStorage.setItem('vecindario.unlock.sunset','true'); } catch (_) {}
-    this.selectTheme('sunset');
+  buyTheme(id) {
+    if (!this.canBuyTheme(id)) return false;
+    this.score -= themeById(id).cost;
+    this.unlockedThemes.add(id);
+    safeSaveUnlock(id);
+    this.selectTheme(id);
     return true;
+  }
+
+  buySunset() { return this.buyTheme('sunset'); }
+
+  canBuyCoastal() {
+    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.coastalUnlocked && this.score >= CONFIG.COASTAL_COST);
+  }
+
+  buyCoastal() {
+    if (!this.canBuyCoastal()) return false;
+    this.score -= CONFIG.COASTAL_COST;
+    this.coastalUnlocked = true;
+    safeSaveUnlock(COASTAL_ID);
+    this.setCoastal(true);
+    return true;
+  }
+
+  // Solo entre niveles: el interruptor vive en la tienda y se aplica al próximo barrio.
+  setCoastal(enabled) {
+    if (!this.coastalUnlocked || !this.shopOpen) return false;
+    this.coastalEnabled = Boolean(enabled);
+    safeSaveStyle(COASTAL_PREF, this.coastalEnabled);
+    this.ui.refresh();
+    return true;
+  }
+
+  toggleCoastal() { return this.setCoastal(!this.coastalEnabled); }
+
+  // Con costa activa: nunca una avenida de borde sobre el mar, ni sobre la calle
+  // que desemboca en él, para no tapar la espuma ni el puerto decorativo.
+  avenueExclusions() {
+    if (!this.level?.coastSide) return [];
+    const map = this.level.map;
+    const shoreStreet = this.level.coastSide === 'left' ? 'V0' : `V${map.cols}`;
+    const pier = coastGeometry(map, this.level.coastSide)?.pier?.streetKey;
+    return pier ? [shoreStreet, pier] : [shoreStreet];
+  }
+
+  canBuyAvenue() {
+    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.avenueUnlocked && this.score >= CONFIG.AVENUE_COST);
+  }
+
+  buyAvenue() {
+    if (!this.canBuyAvenue()) return false;
+    this.score -= CONFIG.AVENUE_COST;
+    this.avenueUnlocked = true;
+    safeSaveUnlock(AVENUE_ID);
+    this.setAvenue(true);
+    return true;
+  }
+
+  setAvenue(enabled) {
+    if (!this.avenueUnlocked || !this.shopOpen) return false;
+    this.avenueEnabled = Boolean(enabled);
+    safeSaveStyle(AVENUE_PREF, this.avenueEnabled);
+    this.ui.refresh();
+    return true;
+  }
+
+  toggleAvenue() { return this.setAvenue(!this.avenueEnabled); }
+
+  resetUnlocks() {
+    safeClearUnlocks();
+    this.coastalUnlocked = false;
+    this.coastalEnabled = false;
+    this.avenueUnlocked = false;
+    this.avenueEnabled = false;
+    this.unlockedThemes = new Set(FREE_THEME_IDS);
+    if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
+    safeSaveTheme(this.theme);
+    this.ui.refresh();
   }
 
   openShop() {
@@ -1359,6 +1764,15 @@ class Game {
     this.shopOpen=true;
     this.ui.hideEnd();
     this.ui.showShop(true);
+    this.ui.refresh();
+  }
+
+  // La tienda es una ventana aparte: cerrarla devuelve al final del caso sin avanzar de nivel.
+  closeShop() {
+    if(!this.shopOpen) return;
+    this.shopOpen=false;
+    this.ui.showShop(false);
+    if(this.finished) this.ui.reopenEnd();
     this.ui.refresh();
   }
 
@@ -1392,8 +1806,9 @@ class Game {
     this.ui.refresh();
   }
 
+  // Se puede avanzar directamente desde el final del caso, con o sin pasar por la tienda.
   nextLevel() {
-    if(!this.finished || !this.lastOutcomeWon || !this.shopOpen) return;
+    if(!this.finished || !this.lastOutcomeWon) return;
     const mode = this.mode;
     const nextLevelNumber = this.levelNumber + 1;
     // Keep unspent points and grant the existing next-level starting allocation once.
@@ -1407,7 +1822,7 @@ class Game {
   }
 
   advanceOrNew() {
-    if (this.lastOutcomeWon) this.openShop();
+    if (this.lastOutcomeWon) this.nextLevel();
     else this.newGame();
   }
 
@@ -1498,7 +1913,7 @@ class UI {
       'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','shopModal','shopBalance','shopLives','shopLifeBtn','shopSunsetBtn','shopContinueBtn','shopStatus'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -1550,9 +1965,18 @@ class UI {
     this.el.buyLifeBtn=document.getElementById('buyLifeBtn');
     this.el.buyLifeBtn.addEventListener('click',()=>this.game.buyLife());
     this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
-    this.el.shopSunsetBtn.addEventListener('click',()=>this.game.buySunset());
     this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
-    document.querySelectorAll('[data-shop-theme]').forEach(btn=>btn.addEventListener('click',()=>this.game.selectTheme(btn.dataset.shopTheme)));
+    this.el.shopBackBtn.addEventListener('click',()=>this.game.closeShop());
+    this.el.shopCoastalBtn.addEventListener('click',()=>{
+      if(this.game.coastalUnlocked) this.game.toggleCoastal();
+      else this.game.buyCoastal();
+    });
+    this.el.shopAvenueBtn.addEventListener('click',()=>{
+      if(this.game.avenueUnlocked) this.game.toggleAvenue();
+      else this.game.buyAvenue();
+    });
+    this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
+    this.buildThemeShelf();
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
     this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
@@ -1560,6 +1984,7 @@ class UI {
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
     this.el.debug100.addEventListener('click', () => this.game.runBatchDebug());
     this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
+    this.el.debugResetUnlocks.addEventListener('click', () => this.game.resetUnlocks());
     this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
 
     this.el.board.addEventListener('pointerup', (e) => {
@@ -1586,6 +2011,22 @@ class UI {
 
     const defs = svgEl('defs');
     svg.appendChild(defs);
+
+    // Avenida con boulevard: dos calzadas negras de la MISMA calle, con su línea
+    // discontinua, y una franja verde central cortada en cada cruce.
+    const avenue = level.avenue ? avenueGeometry(level.avenue, level.map) : null;
+
+    // Ciudad costera: dos rectángulos detrás del barrio. No captura clics y no
+    // participa de la geometría; el oleaje es una sola animación CSS.
+    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide) : null;
+    // La brújula se corre al lado de tierra para no quedar flotando en el agua.
+    if (this.el.app) this.el.app.dataset.coast = coast ? coast.side : '';
+    if (coast) {
+      const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
+      sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
+      sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
+      svg.appendChild(sea);
+    }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
     const neighborhoodClip = svgEl('clipPath', { id: 'neighborhood-grid-clip', clipPathUnits: 'userSpaceOnUse' });
     for (const b of level.map.blocks) {
@@ -1611,8 +2052,33 @@ class UI {
     }
 
     const roadsGroup = svgEl('g', { id: 'roads', 'aria-hidden': 'true' });
-    for (const s of level.map.roadSegments.filter((x) => x.enabled)) {
+    const enabledRoads = level.map.roadSegments.filter((x) => x.enabled);
+    for (const s of enabledRoads) {
+      if (avenue && s.streetKey === avenue.streetKey) continue;
       roadsGroup.appendChild(svgEl('line', { class: 'road', 'data-street': s.streetKey, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
+    }
+    // Un único trazo a lo ancho de toda la avenida: sin uniones, no quedan huecos.
+    // Mismo data-street que la calle original: un testimonio la resalta entera.
+    if (avenue) {
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-avenue', 'data-street': avenue.streetKey }, avenue.asphalt)));
+    }
+    // La línea cortada va después de todas las calzadas: en los cruces queda arriba
+    // del asfalto de la calle que cruza, no debajo.
+    if (coast?.pier) {
+      const pier = { x1: coast.pier.x1, y1: coast.pier.y, x2: coast.pier.x2, y2: coast.pier.y };
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': coast.pier.streetKey }, pier)));
+      for (const d of centerLineDashes(pier, level.map.cellSize)) {
+        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': coast.pier.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+      }
+    }
+    for (const s of enabledRoads) {
+      if (avenue && s.streetKey === avenue.streetKey) continue;
+      const dashes = centerLineDashes(s, level.map.cellSize);
+      if (!dashes.length) continue;
+      roadsGroup.appendChild(svgEl('path', {
+        class: 'road-center', 'data-street': s.streetKey,
+        d: dashes.map((d) => `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}`).join(''),
+      }));
     }
 
     const housesGroup = svgEl('g', { id: 'housesGroup' });
@@ -1632,6 +2098,8 @@ class UI {
       });
       g.appendChild(tone);
 
+      if (h.door) g.appendChild(svgEl('rect', Object.assign({ class: 'house-door' }, doorRect(h, level.map.cellSize))));
+
       const sleep = svgEl('text', { class: 'house-sleep-mark', x: h.rect.x + h.rect.width / 2, y: h.rect.y + h.rect.height / 2 + 5, 'text-anchor': 'middle', 'font-size': 20, 'font-weight': 800 });
       sleep.textContent = 'Z';
       sleep.style.display = 'none';
@@ -1639,6 +2107,17 @@ class UI {
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.game.selectHouse(h.id); } });
       housesGroup.appendChild(g);
     }
+    if (avenue) {
+      for (const c of avenue.laneLines) {
+        for (const d of centerLineDashes(c, level.map.cellSize)) {
+          roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': avenue.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+        }
+      }
+      const boulevard = svgEl('g', { id: 'boulevard', class: 'boulevard', 'data-orientation': avenue.orientation, 'aria-hidden': 'true' });
+      for (const m of avenue.medians) boulevard.appendChild(svgEl('rect', Object.assign({ class: 'avenue-median' }, m)));
+      roadsGroup.appendChild(boulevard);
+    }
+
     svg.appendChild(housesGroup);
     // Back to front: occupied lots, fine grid, then uninterrupted streets.
     svg.appendChild(lotsGroup);
@@ -1679,12 +2158,12 @@ class UI {
       this.el.timeStatus.disabled = false;
       this.el.timeStatus.setAttribute('aria-label',t('shop.cycle'));
       this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
-      this.el.timeValue.textContent = t('shop.'+g.theme);
+      this.el.timeValue.textContent = t('themes.'+g.theme+'.short');
       this.el.app.dataset.phase = g.theme;
     }
 
     const phase = this.el.app.dataset.phase;
-    document.documentElement.dataset.theme = phase === 'night' ? 'dark' : phase === 'sunset' ? 'sunset' : 'light';
+    document.documentElement.dataset.theme = phase === 'night' ? 'dark' : phase === 'day' ? 'light' : phase;
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     const candidates = g.level ? getConsistentCandidates(g.level, g.observations) : [];
@@ -1729,21 +2208,84 @@ class UI {
 
   showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
 
+  // Una ficha por ambiente. El texto se rehace en refreshShop, así el cambio de idioma no toca la estructura.
+  buildThemeShelf() {
+    const shelf=this.el.shopThemeShelf;
+    if(!shelf) return;
+    shelf.innerHTML='';
+    this.themeCards=THEMES.map(theme=>{
+      const card=document.createElement('article');
+      card.className='shop-item shop-theme-card';
+      card.dataset.theme=theme.id;
+      const swatch=document.createElement('div');
+      swatch.className='theme-swatch';
+      swatch.dataset.theme=theme.id;
+      swatch.setAttribute('aria-hidden','true');
+      const title=document.createElement('h3');
+      const help=document.createElement('p');
+      const price=document.createElement('strong');
+      price.className='theme-price';
+      const button=document.createElement('button');
+      button.className='modal-secondary';
+      button.type='button';
+      button.addEventListener('click',()=>{
+        if(this.game.isThemeUnlocked(theme.id)) this.game.selectTheme(theme.id);
+        else this.game.buyTheme(theme.id);
+      });
+      card.append(swatch,title,help,price,button);
+      shelf.appendChild(card);
+      return { theme, card, title, help, price, button };
+    });
+  }
+
   refreshShop() {
     if(!this.el.shopModal || this.el.shopModal.hidden) return;
     const g=this.game;
+    const locale=getLanguage()==='es'?'es-AR':'en-US';
     this.el.shopBalance.textContent=formatCount(Math.max(0,g.score),'point');
     this.el.shopLives.textContent=formatCount(g.lives,'life');
-    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(locale);
     this.el.shopLifeBtn.disabled=g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST || g.losingLife;
     this.el.shopLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
-    this.el.shopSunsetBtn.textContent=g.sunsetUnlocked?t('shop.owned'):t('shop.buy')+' −'+CONFIG.SUNSET_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
-    this.el.shopSunsetBtn.disabled=g.sunsetUnlocked || g.score<CONFIG.SUNSET_COST;
-    this.el.shopStatus.textContent=t(g.sunsetUnlocked?'shop.saved':g.score<CONFIG.SUNSET_COST?'shop.saveMore':'shop.permanent');
-    document.querySelectorAll('[data-shop-theme]').forEach(btn=>{
-      btn.disabled=btn.dataset.shopTheme==='sunset' && !g.sunsetUnlocked;
-      btn.setAttribute('aria-pressed',String(btn.dataset.shopTheme===g.theme));
-    });
+    for(const entry of this.themeCards||[]) {
+      const { theme, card, title, help, price, button } = entry;
+      const unlocked=g.isThemeUnlocked(theme.id);
+      const active=g.theme===theme.id;
+      title.textContent=t('themes.'+theme.id+'.name');
+      help.textContent=t('themes.'+theme.id+'.help');
+      price.textContent=unlocked?t('shop.owned'):'−'+theme.cost.toLocaleString(locale);
+      button.textContent=active?t('shop.inUse'):unlocked?t('shop.use'):t('shop.buy');
+      button.disabled=active || (!unlocked && g.score<theme.cost);
+      button.setAttribute('aria-pressed',String(active));
+      card.classList.toggle('is-active',active);
+      card.classList.toggle('is-locked',!unlocked);
+    }
+    const coastLocale=locale;
+    this.el.shopCoastalCard.classList.toggle('is-active',g.coastalUnlocked && g.coastalEnabled);
+    this.el.shopCoastalCard.classList.toggle('is-locked',!g.coastalUnlocked);
+    this.el.shopCoastalState.textContent=g.coastalUnlocked
+      ? t(g.coastalEnabled?'shop.coastalOn':'shop.coastalOff')
+      : '\u2212'+CONFIG.COASTAL_COST.toLocaleString(coastLocale);
+    this.el.shopCoastalBtn.textContent=g.coastalUnlocked
+      ? t(g.coastalEnabled?'shop.turnOff':'shop.turnOn')
+      : t('shop.buy');
+    this.el.shopCoastalBtn.disabled=!g.coastalUnlocked && g.score<CONFIG.COASTAL_COST;
+    this.el.shopCoastalBtn.setAttribute('aria-pressed',String(g.coastalUnlocked && g.coastalEnabled));
+
+    this.el.shopAvenueCard.classList.toggle('is-active',g.avenueUnlocked && g.avenueEnabled);
+    this.el.shopAvenueCard.classList.toggle('is-locked',!g.avenueUnlocked);
+    this.el.shopAvenueState.textContent=g.avenueUnlocked
+      ? t(g.avenueEnabled?'shop.coastalOn':'shop.coastalOff')
+      : '\u2212'+CONFIG.AVENUE_COST.toLocaleString(coastLocale);
+    this.el.shopAvenueBtn.textContent=g.avenueUnlocked
+      ? t(g.avenueEnabled?'shop.turnOff':'shop.turnOn')
+      : t('shop.buy');
+    this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
+    this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
+
+    const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
+    const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
+    this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');
   }
 
   changeLanguage(language) {
@@ -1784,14 +2326,19 @@ class UI {
     this.clearClueHighlight();
 
     if (clue.visual?.kind === 'street') {
+      // El resaltado es una copia exacta del trazo de la calle —mismo ancho, mismo
+      // remate, misma geometría—, así que no puede sobresalir de los extremos ni de
+      // los cruces. Va encima de todas las calzadas y debajo de la línea cortada,
+      // para que la calle resaltada se lea continua al cruzar otras.
+      const roads = this.el.board.querySelector('#roads');
+      const firstCenter = roads?.querySelector('.road-center') || null;
       for (const key of clue.visual.streetKeys || []) {
         if (!getStreetSegments(this.game.level.map, key).length) continue;
-        const lines = this.el.board.querySelectorAll(`.road[data-street="${key}"]`);
-        for (const line of lines) {
-          line.dataset.oldStroke = line.style.stroke || '';
-          line.style.stroke = 'var(--focus)';
-          line.style.strokeWidth = '13';
-          this.streetHighlightEls.push(line);
+        for (const line of roads.querySelectorAll(`.road[data-street="${key}"]:not(.street-highlight)`)) {
+          const clone = line.cloneNode(false);
+          clone.setAttribute('class', `${line.getAttribute('class')} street-highlight`);
+          roads.insertBefore(clone, firstCenter);
+          this.streetHighlightEls.push(clone);
         }
       }
       setTimeout(() => this.clearClueHighlight(), 1800);
@@ -1827,10 +2374,7 @@ class UI {
   }
 
   clearClueHighlight() {
-    for (const el of this.streetHighlightEls) {
-      el.style.stroke = el.dataset.oldStroke || '';
-      el.style.strokeWidth = '';
-    }
+    for (const el of this.streetHighlightEls) el.remove();
     this.streetHighlightEls = [];
     for (const el of this.blockHighlightEls) el.remove();
     this.blockHighlightEls = [];
@@ -1851,7 +2395,16 @@ class UI {
     this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
     this.el.endQuestions.textContent = formatCount(questions,'question');
     this.el.endLives.textContent = formatCount(lives,'life');
-    this.el.newGameBtn.textContent = won ? t('shop.visit') : uiText.defeat.next;
+    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
+    this.el.shopBtn.hidden = !won;
+    this.el.shopBtn.textContent = t('shop.visit');
+    this.el.endSkipNote.hidden = !won;
+  }
+
+  // La tienda se cierra sin avanzar: vuelve la pantalla de fin de caso tal como estaba.
+  reopenEnd() {
+    const g=this.game;
+    this.showEnd(this.endResult || { won:g.lastOutcomeWon, score:g.score, questions:g.observations.length, lives:g.lives });
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
@@ -1904,6 +2457,11 @@ class UI {
       line('warnings',level.map.houses.filter(h=>visualClueWarnings(level,h.clue).length).map(h=>h.id+': '+h.clue.type).join(', ')||d('none')),
       line('breaks',level.map.removedStreetSegments||0),line('grid',level.map.cols+'×'+level.map.rows)+' · '+d('missing')+' '+(level.map.missingBlocks||0),
       '',d('current'),line('questions',this.game.observations.length),line('candidates',candidates.length+'/'+m.houseCount+' · '+(candidates.join(', ')||d('none'))),
+      '',d('avenue')+': '+(this.game.avenueEnabled ? (level.avenue
+        ? t('debug.yes')+' · '+level.avenue.streetKey+' · '+d(level.avenue.orientation==='H'?'horizontal':'vertical')+' · '+Math.round(level.avenue.length)+'u · '+d(level.avenue.reason==='crosses'?'crossesCity':'outerBorder')+' · '+d('graphIntact')
+        : t('debug.no')+' · '+d('noAvenue')) : t('debug.no')),
+      '',d('coast')+': '+(level.coastSide ? t('coast.'+level.coastSide)+(coastGeometry(level.map,level.coastSide)?.pier ? ' · '+d('pier') : '') : d('none')),
+      '',d('doors')+': '+['N','S','E','W'].map(dir=>t('compass.'+dir)+' '+level.map.houses.filter(h=>h.doorFacing===dir).length).join(' · ')+' · '+d('forced')+' '+level.map.houses.filter(h=>h.frontageCount===1).length+'/'+level.map.houses.length,
       '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];
     for(const h of level.map.houses) {
@@ -1913,7 +2471,7 @@ class UI {
         '  '+h.clue.type+' · '+d('family')+' '+t('families.'+clueFamily(h.clue)),
         '  '+d('predicate')+' '+h.clue.type+'('+JSON.stringify(h.clue.params)+')',
         '  '+evaluateClue(level,h.clue,level.murdererId)+' · '+d(h.id===level.murdererId?'lie':'truth')+' · '+d('inMinimum')+': '+d(sets.some(s=>s.includes(h.id))?'yes':'no'),
-        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount,
+        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount+' · '+d('door')+' '+t('compass.'+h.doorFacing)+(h.frontageCount===1?' ('+d('forced')+')':''),
         '  '+d('alone')+' '+alone.length+'/'+m.houseCount+' '+d('candidates')+': '+alone.join(', ')+' · '+d('reduces')+' '+m.informationByHouse[h.id]+' · '+d('information')+' '+Math.log2(m.houseCount/alone.length).toFixed(2)+' bits');
     }
     this.el.debugOutput.textContent=lines.join('\n');

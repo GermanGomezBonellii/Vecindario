@@ -1,17 +1,19 @@
-import { CONFIG } from './config.js';
+import { CONFIG, THEMES, THEME_IDS, FREE_THEME_IDS, UNLOCK_NAMESPACE, themeById } from './config.js';
 import { t, pickDecorativeKey } from './copy.js';
 import { generateLevel, batchValidate } from './generator.js';
 import { bestHintHouse } from './solver.js';
-import { randomSeed } from './rng.js';
-import { phaseForHour } from './map.js';
+import { randomSeed, createRng } from './rng.js';
+import { phaseForHour, avenueStreet, coastGeometry } from './map.js';
 import { AudioManager } from './audio.js';
 import { UI } from './ui.js';
 import { runInternalTests } from './tests.js';
 
+const UNLOCK_PREFIX = UNLOCK_NAMESPACE;
+
 function safeGetTheme() {
   try {
     const saved = localStorage.getItem('vecindario-theme');
-    return ['day','night','sunset'].includes(saved) ? saved : 'day';
+    return THEME_IDS.includes(saved) ? saved : 'day';
   } catch (_) {
     return 'day';
   }
@@ -19,6 +21,39 @@ function safeGetTheme() {
 
 function safeSaveTheme(theme) {
   try { localStorage.setItem('vecindario-theme', theme); } catch (_) { /* file:// can block storage */ }
+}
+
+function safeReadUnlock(id) {
+  try { return localStorage.getItem(UNLOCK_PREFIX + id) === 'true'; } catch (_) { return false; }
+}
+
+const COASTAL_ID = 'coastal';
+const COASTAL_PREF = 'vecindario.style.coastal';
+const AVENUE_ID = 'avenue';
+const AVENUE_PREF = 'vecindario.style.avenue';
+
+function safeReadStyle(key) {
+  try { return localStorage.getItem(key) === 'true'; } catch (_) { return false; }
+}
+
+function safeSaveStyle(key, enabled) {
+  try { localStorage.setItem(key, String(enabled)); } catch (_) { /* file:// can block storage */ }
+}
+
+function safeSaveUnlock(id) {
+  try { localStorage.setItem(UNLOCK_PREFIX + id, 'true'); } catch (_) { /* file:// can block storage */ }
+}
+
+// Herramienta de desarrollo: deja la cuenta como la de alguien que nunca compró nada.
+function safeClearUnlocks() {
+  try {
+    for (const theme of THEMES) localStorage.removeItem(UNLOCK_PREFIX + theme.id);
+    localStorage.removeItem(UNLOCK_PREFIX + COASTAL_ID);
+    localStorage.removeItem(COASTAL_PREF);
+    localStorage.removeItem(UNLOCK_PREFIX + AVENUE_ID);
+    localStorage.removeItem(AVENUE_PREF);
+    localStorage.removeItem('vecindario-theme');
+  } catch (_) { /* file:// can block storage */ }
 }
 
 export class Game {
@@ -29,10 +64,14 @@ export class Game {
     this.debug = debug;
     this.pendingMode = 'normal';
     this.mode = 'normal';
-    this.sunsetUnlocked = false;
-    try { this.sunsetUnlocked=localStorage.getItem('vecindario.unlock.sunset')==='true'; } catch (_) {}
+    this.unlockedThemes = new Set(FREE_THEME_IDS);
+    for (const theme of THEMES) if (theme.cost > 0 && safeReadUnlock(theme.id)) this.unlockedThemes.add(theme.id);
     this.theme = safeGetTheme();
-    if(this.theme==='sunset' && !this.sunsetUnlocked) this.theme='day';
+    if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
+    this.coastalUnlocked = safeReadUnlock(COASTAL_ID);
+    this.coastalEnabled = this.coastalUnlocked && safeReadStyle(COASTAL_PREF);
+    this.avenueUnlocked = safeReadUnlock(AVENUE_ID);
+    this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
     this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
@@ -48,6 +87,12 @@ export class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
+    // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
+    // caso con costa o sin ella.
+    this.level.coastSide = this.coastalEnabled ? (createRng(`${seed}|coast`)() < 0.5 ? 'left' : 'right') : null;
+    // La avenida no necesita azar: sale de la geometría, así que la misma seed con
+    // la misma configuración elige siempre la misma calle.
+    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { exclude: this.avenueExclusions() }) : null;
     this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
@@ -203,7 +248,18 @@ export class Game {
     this.selectTheme(themes[(themes.indexOf(this.theme)+1)%themes.length]);
   }
 
-  availableThemes() { return this.sunsetUnlocked ? ['day','night','sunset'] : ['day','night']; }
+  availableThemes() { return THEME_IDS.filter((id) => this.unlockedThemes.has(id)); }
+
+  isThemeUnlocked(id) { return this.unlockedThemes.has(id); }
+
+  // Compatibilidad con la primera versión de la tienda.
+  get sunsetUnlocked() { return this.unlockedThemes.has('sunset'); }
+
+  canBuyTheme(id) {
+    const theme = themeById(id);
+    return Boolean(theme && theme.cost > 0 && this.shopOpen && this.lastOutcomeWon
+      && !this.unlockedThemes.has(id) && this.score >= theme.cost);
+  }
 
   selectTheme(theme) {
     if ((this.level?.timed && !this.shopOpen) || !this.availableThemes().includes(theme)) return false;
@@ -213,13 +269,84 @@ export class Game {
     return true;
   }
 
-  buySunset() {
-    if (!this.shopOpen || !this.lastOutcomeWon || this.sunsetUnlocked || this.score<CONFIG.SUNSET_COST) return false;
-    this.score-=CONFIG.SUNSET_COST;
-    this.sunsetUnlocked=true;
-    try { localStorage.setItem('vecindario.unlock.sunset','true'); } catch (_) {}
-    this.selectTheme('sunset');
+  buyTheme(id) {
+    if (!this.canBuyTheme(id)) return false;
+    this.score -= themeById(id).cost;
+    this.unlockedThemes.add(id);
+    safeSaveUnlock(id);
+    this.selectTheme(id);
     return true;
+  }
+
+  buySunset() { return this.buyTheme('sunset'); }
+
+  canBuyCoastal() {
+    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.coastalUnlocked && this.score >= CONFIG.COASTAL_COST);
+  }
+
+  buyCoastal() {
+    if (!this.canBuyCoastal()) return false;
+    this.score -= CONFIG.COASTAL_COST;
+    this.coastalUnlocked = true;
+    safeSaveUnlock(COASTAL_ID);
+    this.setCoastal(true);
+    return true;
+  }
+
+  // Solo entre niveles: el interruptor vive en la tienda y se aplica al próximo barrio.
+  setCoastal(enabled) {
+    if (!this.coastalUnlocked || !this.shopOpen) return false;
+    this.coastalEnabled = Boolean(enabled);
+    safeSaveStyle(COASTAL_PREF, this.coastalEnabled);
+    this.ui.refresh();
+    return true;
+  }
+
+  toggleCoastal() { return this.setCoastal(!this.coastalEnabled); }
+
+  // Con costa activa: nunca una avenida de borde sobre el mar, ni sobre la calle
+  // que desemboca en él, para no tapar la espuma ni el puerto decorativo.
+  avenueExclusions() {
+    if (!this.level?.coastSide) return [];
+    const map = this.level.map;
+    const shoreStreet = this.level.coastSide === 'left' ? 'V0' : `V${map.cols}`;
+    const pier = coastGeometry(map, this.level.coastSide)?.pier?.streetKey;
+    return pier ? [shoreStreet, pier] : [shoreStreet];
+  }
+
+  canBuyAvenue() {
+    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.avenueUnlocked && this.score >= CONFIG.AVENUE_COST);
+  }
+
+  buyAvenue() {
+    if (!this.canBuyAvenue()) return false;
+    this.score -= CONFIG.AVENUE_COST;
+    this.avenueUnlocked = true;
+    safeSaveUnlock(AVENUE_ID);
+    this.setAvenue(true);
+    return true;
+  }
+
+  setAvenue(enabled) {
+    if (!this.avenueUnlocked || !this.shopOpen) return false;
+    this.avenueEnabled = Boolean(enabled);
+    safeSaveStyle(AVENUE_PREF, this.avenueEnabled);
+    this.ui.refresh();
+    return true;
+  }
+
+  toggleAvenue() { return this.setAvenue(!this.avenueEnabled); }
+
+  resetUnlocks() {
+    safeClearUnlocks();
+    this.coastalUnlocked = false;
+    this.coastalEnabled = false;
+    this.avenueUnlocked = false;
+    this.avenueEnabled = false;
+    this.unlockedThemes = new Set(FREE_THEME_IDS);
+    if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
+    safeSaveTheme(this.theme);
+    this.ui.refresh();
   }
 
   openShop() {
@@ -227,6 +354,15 @@ export class Game {
     this.shopOpen=true;
     this.ui.hideEnd();
     this.ui.showShop(true);
+    this.ui.refresh();
+  }
+
+  // La tienda es una ventana aparte: cerrarla devuelve al final del caso sin avanzar de nivel.
+  closeShop() {
+    if(!this.shopOpen) return;
+    this.shopOpen=false;
+    this.ui.showShop(false);
+    if(this.finished) this.ui.reopenEnd();
     this.ui.refresh();
   }
 
@@ -260,8 +396,9 @@ export class Game {
     this.ui.refresh();
   }
 
+  // Se puede avanzar directamente desde el final del caso, con o sin pasar por la tienda.
   nextLevel() {
-    if(!this.finished || !this.lastOutcomeWon || !this.shopOpen) return;
+    if(!this.finished || !this.lastOutcomeWon) return;
     const mode = this.mode;
     const nextLevelNumber = this.levelNumber + 1;
     // Keep unspent points and grant the existing next-level starting allocation once.
@@ -275,7 +412,7 @@ export class Game {
   }
 
   advanceOrNew() {
-    if (this.lastOutcomeWon) this.openShop();
+    if (this.lastOutcomeWon) this.nextLevel();
     else this.newGame();
   }
 

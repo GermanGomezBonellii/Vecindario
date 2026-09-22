@@ -7,8 +7,11 @@
   <title>Vecindario</title>
   <script>
     try {
+      const themeAttr={day:'light',night:'dark',sunset:'sunset',forest:'forest',midnight:'midnight',cherry:'cherry'};
+      const freeThemes=['day','night'];
       const savedTheme=localStorage.getItem('vecindario-theme');
-      document.documentElement.dataset.theme=savedTheme==='night'?'dark':savedTheme==='sunset' && localStorage.getItem('vecindario.unlock.sunset')==='true'?'sunset':'light';
+      const usable=savedTheme&&themeAttr[savedTheme]&&(freeThemes.includes(savedTheme)||localStorage.getItem('vecindario.unlock.2.'+savedTheme)==='true');
+      document.documentElement.dataset.theme=usable?themeAttr[savedTheme]:'light';
     } catch (_) {}
   </script>
   <link rel="stylesheet" href="./css/styles.css">
@@ -44,7 +47,6 @@
             <span class="compass-e">E</span>
             <span class="compass-s">S</span>
             <span class="compass-o" data-copy="labels.west"></span>
-            <span class="compass-dot"></span>
           </div>
           <div id="phaseToast" class="phase-toast" hidden>
             <strong id="phaseToastTitle" data-copy="night.title"></strong>
@@ -130,8 +132,10 @@
           <div><strong id="endQuestions">0</strong></div>
           <div><strong id="endLives">0</strong></div>
         </div>
+        <p id="endSkipNote" class="end-note" data-copy="shop.skip" hidden></p>
         <div class="modal-actions stacked-mobile">
           <button id="retryBtn" class="modal-secondary" type="button" data-copy="defeat.retry"></button>
+          <button id="shopBtn" class="modal-secondary" type="button" data-copy="shop.visit" hidden></button>
           <button id="newGameBtn" class="modal-primary" type="button" data-copy="defeat.next"></button>
         </div>
       </section>
@@ -143,18 +147,40 @@
         <h2 id="shopTitle" data-copy="shop.title"></h2>
         <p data-copy="shop.intro"></p>
         <div class="shop-wallet"><span data-copy="shop.balance"></span><strong id="shopBalance" aria-live="polite"></strong></div>
-        <div class="shop-items">
-          <article class="shop-item"><span class="shop-life-art" aria-hidden="true">●</span><h3 data-copy="shop.life"></h3><p data-copy="shop.lifeHelp"></p><strong id="shopLives"></strong><button id="shopLifeBtn" class="modal-secondary" type="button"></button></article>
-          <article class="shop-item"><div class="sunset-swatch" aria-hidden="true"></div><h3 data-copy="shop.sunset"></h3><p data-copy="shop.sunsetHelp"></p><button id="shopSunsetBtn" class="modal-secondary" type="button"></button></article>
+        <div class="shop-items shop-life-shelf">
+          <article class="shop-item shop-life-card"><span class="shop-life-art" aria-hidden="true">●</span><h3 data-copy="shop.life"></h3><p data-copy="shop.lifeHelp"></p><strong id="shopLives"></strong><button id="shopLifeBtn" class="modal-secondary" type="button"></button></article>
+        </div>
+        <div class="shop-section-head">
+          <span class="eyebrow" data-copy="shop.ambiences"></span>
+          <span class="shop-section-help" data-copy="shop.ambiencesHelp"></span>
+        </div>
+        <div class="shop-items shop-theme-shelf" id="shopThemeShelf" data-copy-aria="shop.themes"></div>
+        <div class="shop-section-head">
+          <span class="eyebrow" data-copy="shop.styles"></span>
+          <span class="shop-section-help" data-copy="shop.stylesHelp"></span>
+        </div>
+        <div class="shop-items shop-life-shelf">
+          <article class="shop-item shop-life-card" id="shopCoastalCard">
+            <div class="coast-swatch" aria-hidden="true"><span></span></div>
+            <h3 data-copy="shop.coastal"></h3>
+            <p data-copy="shop.coastalHelp"></p>
+            <strong id="shopCoastalState"></strong>
+            <button id="shopCoastalBtn" class="modal-secondary" type="button"></button>
+          </article>
+          <article class="shop-item shop-life-card" id="shopAvenueCard">
+            <div class="avenue-swatch" aria-hidden="true"><i></i><b></b><i></i></div>
+            <h3 data-copy="shop.avenue"></h3>
+            <p data-copy="shop.avenueHelp"></p>
+            <strong id="shopAvenueState"></strong>
+            <button id="shopAvenueBtn" class="modal-secondary" type="button"></button>
+          </article>
         </div>
         <p id="shopStatus" aria-live="polite"></p>
-        <div class="shop-themes" role="group" data-copy-aria="shop.themes">
-          <button type="button" data-shop-theme="day" data-copy="shop.day" aria-pressed="false"></button>
-          <button type="button" data-shop-theme="night" data-copy="shop.night" aria-pressed="false"></button>
-          <button type="button" data-shop-theme="sunset" data-copy="shop.sunset" aria-pressed="false"></button>
-        </div>
         <p class="shop-credit" data-copy="shop.credit"></p>
-        <button id="shopContinueBtn" class="modal-primary" type="button" data-copy="shop.continue"></button>
+        <div class="modal-actions stacked-mobile">
+          <button id="shopBackBtn" class="modal-secondary" type="button" data-copy="shop.back"></button>
+          <button id="shopContinueBtn" class="modal-primary" type="button" data-copy="shop.continue"></button>
+        </div>
       </section>
     </div>
 
@@ -167,6 +193,7 @@
       <div class="debug-actions">
         <button id="debug100" type="button" data-copy="labels.batch"></button>
         <button id="debugTimed" type="button" data-copy="labels.demo"></button>
+        <button id="debugResetUnlocks" type="button" data-copy="labels.resetUnlocks"></button>
       </div>
       <pre id="debugBatchOutput"></pre>
     </section>

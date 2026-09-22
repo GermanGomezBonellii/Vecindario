@@ -146,6 +146,17 @@ export function validateStreetTopology(map) {
     const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
     const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
     if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    const doorStreetKey = house.doorSide && sideStreetKey(block, house.doorSide);
+    if(!actualSides.includes(house.doorSide) || doorStreetKey!==house.primaryStreetKey || house.doorFacing!==DOOR_FACING[house.doorSide]) return {valid:false,reason:'invalid_door_side'};
+    const door = doorSegment(house.rect, house.doorSide, map.cellSize);
+    if(['x1','y1','x2','y2'].some(k=>Math.abs(house.door[k]-door[k])>0.001)) return {valid:false,reason:'invalid_door_geometry'};
+    const doorLength = Math.hypot(door.x2-door.x1, door.y2-door.y1);
+    if(Math.abs(doorLength - map.cellSize*DOOR_WIDTH_RATIO)>0.001) return {valid:false,reason:'invalid_door_length'};
+    // Un octavo de lote de superficie, y nunca pegada a una esquina del muro.
+    const drawn = doorRect(house, map.cellSize);
+    if(Math.abs(drawn.width*drawn.height - map.cellSize*map.cellSize/8)>0.001) return {valid:false,reason:'invalid_door_area'};
+    const wall = (house.doorSide==='top'||house.doorSide==='bottom') ? house.rect.width : house.rect.height;
+    if((wall - doorLength)/2 < map.cellSize*DOOR_MIN_MARGIN_RATIO - 0.001) return {valid:false,reason:'door_too_close_to_corner'};
     if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
   }
   for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
@@ -178,6 +189,227 @@ function sideStreetKey(block, side) {
 }
 
 import { getHouseSizeDistribution } from './config.js';
+
+// ---------------------------------------------------------------------------
+// Ciudad costera. Capa puramente estética: se calcula a partir del mapa ya
+// generado y no toca los nodos, los segmentos ni el grafo que usan el solver y
+// los testimonios. El mar ocupa el margen que el tablero ya dejaba libre de ese
+// lado, así que ninguna casa puede quedar dentro del agua.
+export const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
+export const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
+export const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
+
+export function coastGeometry(map, side) {
+  if (side !== 'left' && side !== 'right') return null;
+  const shore = side === 'left' ? map.x[0] : map.x.at(-1);
+  const foamWidth = Math.max(10, map.cellSize * COAST_FOAM_RATIO);
+  const outer = side === 'left' ? -COAST_BLEED : map.width + COAST_BLEED;
+  const water = {
+    x: Math.min(outer, shore), y: -COAST_BLEED,
+    width: Math.abs(shore - outer), height: map.height + COAST_BLEED * 2,
+  };
+  const foam = {
+    x: side === 'left' ? shore - foamWidth : shore, y: water.y,
+    width: foamWidth, height: water.height,
+  };
+  return { side, shore, water, foam, pier: coastPier(map, side, shore) };
+}
+
+// Una calle del borde costero se prolonga hacia el mar. Es solamente un trazo:
+// no hay lotes ni casas sobre ese tramo y no entra en map.roadSegments, así que
+// las distancias y las pistas de calle siguen viendo el mismo barrio de siempre.
+function coastPier(map, side, shore) {
+  const column = side === 'left' ? 0 : map.cols - 1;
+  const rows = [];
+  for (let r = 0; r <= map.rows; r += 1) {
+    const segment = map.roadSegments.find((s) => s.enabled && s.orientation === 'H' && s.c === column && s.r === r);
+    if (segment) rows.push({ r, y: segment.y1, streetKey: segment.streetKey });
+  }
+  if (!rows.length) return null;
+  // La del medio: la que menos se confunde con el borde exterior del barrio.
+  const chosen = rows[Math.floor(rows.length / 2)];
+  const length = map.cellSize * COAST_PIER_RATIO;
+  return {
+    streetKey: chosen.streetKey,
+    y: chosen.y,
+    x1: shore,
+    x2: side === 'left' ? shore - length : shore + length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Avenida con boulevard. Igual que la costa: se deriva del mapa ya generado y no
+// toca nodos, segmentos ni grafo. La calle elegida conserva su identificador
+// lógico; las dos calzadas son dos trazos de la MISMA calle.
+export const AVENUE_ROADWAY = 7;          // ancho de cada calzada
+export const AVENUE_MEDIAN = 8;           // ancho del boulevard central
+export const AVENUE_WIDTH = AVENUE_ROADWAY * 2 + AVENUE_MEDIAN;
+export const ROAD_WIDTH = 13;             // espejo de .road en el CSS: la avenida tiene que encastrar con las calles
+
+// Un tramo es de contorno cuando tiene manzana de un solo lado.
+function borderSegment(map, segment, blockIds) {
+  const { c, r } = segment;
+  const pair = segment.orientation === 'H'
+    ? [`B${c}_${r - 1}`, `B${c}_${r}`]
+    : [`B${c - 1}_${r}`, `B${c}_${r}`];
+  return pair.filter((id) => blockIds.has(id)).length === 1;
+}
+
+export function streetProfile(map, streetKey) {
+  const blockIds = new Set(map.blocks.map((b) => b.id));
+  const all = map.roadSegments.filter((s) => s.streetKey === streetKey);
+  const enabled = all.filter((s) => s.enabled);
+  if (!enabled.length) return null;
+  const ordinals = enabled.map((s) => s.segmentOrdinal).sort((a, b) => a - b);
+  // Sin huecos: los tramos activos tienen que ser consecutivos.
+  const contiguous = ordinals.every((o, i) => i === 0 || o === ordinals[i - 1] + 1);
+  // Atraviesa el barrio de un extremo al otro: ningún tramo de la calle falta.
+  const crosses = enabled.length === all.length;
+  const border = enabled.every((s) => borderSegment(map, s, blockIds));
+  const length = enabled.reduce((sum, s) => sum + Math.hypot(s.x2 - s.x1, s.y2 - s.y1), 0);
+  return { streetKey, orientation: enabled[0].orientation, segments: enabled, contiguous, crosses, border, length };
+}
+
+export function avenueStreet(map, { exclude = [] } = {}) {
+  const keys = [...new Set(map.roadSegments.filter((s) => s.enabled).map((s) => s.streetKey))];
+  const candidates = keys
+    .filter((key) => !exclude.includes(key))
+    .map((key) => streetProfile(map, key))
+    .filter((p) => p && p.contiguous && p.segments.length >= 2 && (p.crosses || p.border));
+  if (!candidates.length) return null;
+  // Prioridad: atraviesa el barrio, después contorno exterior, después la más larga.
+  candidates.sort((a, b) => (Number(b.crosses) - Number(a.crosses))
+    || (Number(b.border) - Number(a.border))
+    || (b.length - a.length)
+    || a.streetKey.localeCompare(b.streetKey));
+  const chosen = candidates[0];
+  return { ...chosen, reason: chosen.crosses ? 'crosses' : 'border' };
+}
+
+// Geometría de dibujo. El asfalto es un único trazo continuo a lo ancho de toda la
+// avenida: sin uniones, no puede quedar ningún hueco. La franja verde se pinta
+// encima y se corta solamente donde hay una intersección real, es decir donde una
+// calle perpendicular llega a ese nodo. Las puntas llegan tan lejos como las de
+// cualquier calle del barrio (media calzada más allá del último nodo), ni más ni menos.
+function crossesAt(map, street, index) {
+  const horizontal = street.orientation === 'H';
+  const row = street.segments[0].r;
+  const column = street.segments[0].c;
+  return map.roadSegments.some((s) => s.enabled && (horizontal
+    ? s.orientation === 'V' && s.c === index && (s.r === row || s.r === row - 1)
+    : s.orientation === 'H' && s.r === index && (s.c === column || s.c === column - 1)));
+}
+
+export function avenueGeometry(street, map) {
+  if (!street) return null;
+  const horizontal = street.orientation === 'H';
+  const half = ROAD_WIDTH / 2;
+  const axis = horizontal ? street.segments[0].y1 : street.segments[0].x1;
+  const at = (seg, n) => (horizontal ? seg[`x${n}`] : seg[`y${n}`]);
+
+  // Extensión total, con la misma prolongación que tiene cualquier calle en sus puntas.
+  const bounds = street.segments.flatMap((seg) => [at(seg, 1), at(seg, 2)]);
+  const from = Math.min(...bounds) - half;
+  const to = Math.max(...bounds) + half;
+  const asphalt = horizontal
+    ? { x1: from, y1: axis, x2: to, y2: axis }
+    : { x1: axis, y1: from, x2: axis, y2: to };
+
+  // Nodos de la calle y su posición; se corta solo en los que tienen calle cruzada.
+  const indices = new Set();
+  for (const seg of street.segments) {
+    const base = horizontal ? seg.c : seg.r;
+    indices.add(base);
+    indices.add(base + 1);
+  }
+  const axisPos = horizontal ? map.x : map.y;
+  const cuts = [...indices]
+    .filter((i) => crossesAt(map, street, i))
+    .map((i) => [Math.max(from, axisPos[i] - half), Math.min(to, axisPos[i] + half)])
+    .filter(([a, b]) => b > a)
+    .sort((a, b) => a[0] - b[0]);
+
+  // La franja verde ocupa todo lo que queda entre corte y corte, sin márgenes.
+  const medians = [];
+  let cursor = from;
+  for (const [a, b] of [...cuts, [to, to]]) {
+    if (a - cursor > 0.001) {
+      medians.push(horizontal
+        ? { x: cursor, y: axis - AVENUE_MEDIAN / 2, width: a - cursor, height: AVENUE_MEDIAN }
+        : { x: axis - AVENUE_MEDIAN / 2, y: cursor, width: AVENUE_MEDIAN, height: a - cursor });
+    }
+    cursor = Math.max(cursor, b);
+  }
+
+  // Ejes de cada calzada: sobre ellos va la línea discontinua, tramo por tramo.
+  const laneOffset = AVENUE_MEDIAN / 2 + AVENUE_ROADWAY / 2;
+  const laneLines = [];
+  for (const seg of street.segments) {
+    for (const sign of [-1, 1]) {
+      laneLines.push(horizontal
+        ? { x1: seg.x1, y1: seg.y1 + sign * laneOffset, x2: seg.x2, y2: seg.y2 + sign * laneOffset }
+        : { x1: seg.x1 + sign * laneOffset, y1: seg.y1, x2: seg.x2 + sign * laneOffset, y2: seg.y2 });
+    }
+  }
+
+  return { streetKey: street.streetKey, orientation: street.orientation, reason: street.reason, length: street.length, asphalt, medians, laneLines };
+}
+
+// Línea cortada del centro de la calzada. Todos los trazos del barrio miden lo
+// mismo: se calcula cuántos enteros entran en el tramo, dejando aire en las dos
+// puntas para que los cruces queden limpios, y se dibujan solo esos. Un trazo que
+// no entra completo no se dibuja, y un tramo demasiado corto se queda sin línea.
+export const CENTER_DASH_RATIO = 0.2;
+export const CENTER_GAP_RATIO = 0.26;
+export const CENTER_MARGIN_RATIO = 0.16;
+
+export function centerLineDashes(segment, cellSize) {
+  const dash = cellSize * CENTER_DASH_RATIO;
+  const gap = cellSize * CENTER_GAP_RATIO;
+  const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1);
+  const usable = length - cellSize * CENTER_MARGIN_RATIO * 2;
+  const count = Math.floor((usable + gap) / (dash + gap));
+  if (count < 1) return [];
+  const start = (length - (count * dash + (count - 1) * gap)) / 2;
+  const ux = (segment.x2 - segment.x1) / length;
+  const uy = (segment.y2 - segment.y1) / length;
+  return Array.from({ length: count }, (_, i) => {
+    const from = start + i * (dash + gap);
+    return {
+      x1: segment.x1 + ux * from, y1: segment.y1 + uy * from,
+      x2: segment.x1 + ux * (from + dash), y2: segment.y1 + uy * (from + dash),
+    };
+  });
+}
+
+// La puerta mide un octavo de lote: un cuarto de lote de ancho sobre el muro por
+// medio lote de profundidad hacia adentro de la casa. Va centrada sobre su muro,
+// que siempre deja al menos un cuarto de lote a cada costado (el muro más corto
+// posible mide un lote entero: (1 - 1/4) / 2 = 3/8 por lado).
+export const DOOR_FACING = { top: 'N', bottom: 'S', left: 'W', right: 'E' };
+export const DOOR_WIDTH_RATIO = 1 / 4;
+export const DOOR_DEPTH_RATIO = 1 / 2;
+export const DOOR_MIN_MARGIN_RATIO = 1 / 4;
+
+export function doorSegment(rect, side, cellSize) {
+  const width = cellSize * DOOR_WIDTH_RATIO;
+  const midX = rect.x + rect.width / 2;
+  const midY = rect.y + rect.height / 2;
+  if (side === 'top') return { x1: midX - width / 2, y1: rect.y, x2: midX + width / 2, y2: rect.y };
+  if (side === 'bottom') return { x1: midX - width / 2, y1: rect.y + rect.height, x2: midX + width / 2, y2: rect.y + rect.height };
+  if (side === 'left') return { x1: rect.x, y1: midY - width / 2, x2: rect.x, y2: midY + width / 2 };
+  return { x1: rect.x + rect.width, y1: midY - width / 2, x2: rect.x + rect.width, y2: midY + width / 2 };
+}
+
+export function doorRect(house, cellSize) {
+  const { rect, doorSide: side, door } = house;
+  const width = cellSize * DOOR_WIDTH_RATIO;
+  const depth = cellSize * DOOR_DEPTH_RATIO;
+  if (side === 'top') return { x: door.x1, y: rect.y, width, height: depth };
+  if (side === 'bottom') return { x: door.x1, y: rect.y + rect.height - depth, width, height: depth };
+  if (side === 'left') return { x: rect.x, y: door.y1, width: depth, height: width };
+  return { x: rect.x + rect.width - depth, y: door.y1, width: depth, height: width };
+}
 
 export const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
@@ -286,6 +518,9 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
       freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
       rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
+      // El acceso a la calle ya existia: la puerta solo lo hace visible.
+      doorSide: access.side, doorFacing: DOOR_FACING[access.side],
+      door: doorSegment({ x: rx, y: ry, width: rw, height: rh }, access.side, cellSize),
       adjacentStreetKeys: [...new Set(candidateBorders.map((b) => b.streetKey))],
       asked: false, mark: null, confirmedInnocent: false,
     };

@@ -1,7 +1,7 @@
-import { getStreetSegments, phaseForHour } from './map.js';
+import { getStreetSegments, phaseForHour, doorRect, centerLineDashes, coastGeometry, avenueGeometry } from './map.js';
 import { evaluateClue, clueFamily, CLUE_FAMILY_LABELS } from './clues.js';
 import { getConsistentCandidates } from './solver.js';
-import { CONFIG } from './config.js';
+import { CONFIG, THEMES } from './config.js';
 import { uiText, applyCopy, t, getLanguage, setLanguage, formatCount } from './copy.js';
 import { renderClue } from './clue-copy.js';
 import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
@@ -21,7 +21,7 @@ export class UI {
       'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','shopModal','shopBalance','shopLives','shopLifeBtn','shopSunsetBtn','shopContinueBtn','shopStatus'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -73,9 +73,18 @@ export class UI {
     this.el.buyLifeBtn=document.getElementById('buyLifeBtn');
     this.el.buyLifeBtn.addEventListener('click',()=>this.game.buyLife());
     this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
-    this.el.shopSunsetBtn.addEventListener('click',()=>this.game.buySunset());
     this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
-    document.querySelectorAll('[data-shop-theme]').forEach(btn=>btn.addEventListener('click',()=>this.game.selectTheme(btn.dataset.shopTheme)));
+    this.el.shopBackBtn.addEventListener('click',()=>this.game.closeShop());
+    this.el.shopCoastalBtn.addEventListener('click',()=>{
+      if(this.game.coastalUnlocked) this.game.toggleCoastal();
+      else this.game.buyCoastal();
+    });
+    this.el.shopAvenueBtn.addEventListener('click',()=>{
+      if(this.game.avenueUnlocked) this.game.toggleAvenue();
+      else this.game.buyAvenue();
+    });
+    this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
+    this.buildThemeShelf();
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
     this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
@@ -83,6 +92,7 @@ export class UI {
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
     this.el.debug100.addEventListener('click', () => this.game.runBatchDebug());
     this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
+    this.el.debugResetUnlocks.addEventListener('click', () => this.game.resetUnlocks());
     this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
 
     this.el.board.addEventListener('pointerup', (e) => {
@@ -109,6 +119,22 @@ export class UI {
 
     const defs = svgEl('defs');
     svg.appendChild(defs);
+
+    // Avenida con boulevard: dos calzadas negras de la MISMA calle, con su línea
+    // discontinua, y una franja verde central cortada en cada cruce.
+    const avenue = level.avenue ? avenueGeometry(level.avenue, level.map) : null;
+
+    // Ciudad costera: dos rectángulos detrás del barrio. No captura clics y no
+    // participa de la geometría; el oleaje es una sola animación CSS.
+    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide) : null;
+    // La brújula se corre al lado de tierra para no quedar flotando en el agua.
+    if (this.el.app) this.el.app.dataset.coast = coast ? coast.side : '';
+    if (coast) {
+      const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
+      sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
+      sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
+      svg.appendChild(sea);
+    }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
     const neighborhoodClip = svgEl('clipPath', { id: 'neighborhood-grid-clip', clipPathUnits: 'userSpaceOnUse' });
     for (const b of level.map.blocks) {
@@ -134,8 +160,33 @@ export class UI {
     }
 
     const roadsGroup = svgEl('g', { id: 'roads', 'aria-hidden': 'true' });
-    for (const s of level.map.roadSegments.filter((x) => x.enabled)) {
+    const enabledRoads = level.map.roadSegments.filter((x) => x.enabled);
+    for (const s of enabledRoads) {
+      if (avenue && s.streetKey === avenue.streetKey) continue;
       roadsGroup.appendChild(svgEl('line', { class: 'road', 'data-street': s.streetKey, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
+    }
+    // Un único trazo a lo ancho de toda la avenida: sin uniones, no quedan huecos.
+    // Mismo data-street que la calle original: un testimonio la resalta entera.
+    if (avenue) {
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-avenue', 'data-street': avenue.streetKey }, avenue.asphalt)));
+    }
+    // La línea cortada va después de todas las calzadas: en los cruces queda arriba
+    // del asfalto de la calle que cruza, no debajo.
+    if (coast?.pier) {
+      const pier = { x1: coast.pier.x1, y1: coast.pier.y, x2: coast.pier.x2, y2: coast.pier.y };
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': coast.pier.streetKey }, pier)));
+      for (const d of centerLineDashes(pier, level.map.cellSize)) {
+        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': coast.pier.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+      }
+    }
+    for (const s of enabledRoads) {
+      if (avenue && s.streetKey === avenue.streetKey) continue;
+      const dashes = centerLineDashes(s, level.map.cellSize);
+      if (!dashes.length) continue;
+      roadsGroup.appendChild(svgEl('path', {
+        class: 'road-center', 'data-street': s.streetKey,
+        d: dashes.map((d) => `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}`).join(''),
+      }));
     }
 
     const housesGroup = svgEl('g', { id: 'housesGroup' });
@@ -155,6 +206,8 @@ export class UI {
       });
       g.appendChild(tone);
 
+      if (h.door) g.appendChild(svgEl('rect', Object.assign({ class: 'house-door' }, doorRect(h, level.map.cellSize))));
+
       const sleep = svgEl('text', { class: 'house-sleep-mark', x: h.rect.x + h.rect.width / 2, y: h.rect.y + h.rect.height / 2 + 5, 'text-anchor': 'middle', 'font-size': 20, 'font-weight': 800 });
       sleep.textContent = 'Z';
       sleep.style.display = 'none';
@@ -162,6 +215,17 @@ export class UI {
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.game.selectHouse(h.id); } });
       housesGroup.appendChild(g);
     }
+    if (avenue) {
+      for (const c of avenue.laneLines) {
+        for (const d of centerLineDashes(c, level.map.cellSize)) {
+          roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': avenue.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+        }
+      }
+      const boulevard = svgEl('g', { id: 'boulevard', class: 'boulevard', 'data-orientation': avenue.orientation, 'aria-hidden': 'true' });
+      for (const m of avenue.medians) boulevard.appendChild(svgEl('rect', Object.assign({ class: 'avenue-median' }, m)));
+      roadsGroup.appendChild(boulevard);
+    }
+
     svg.appendChild(housesGroup);
     // Back to front: occupied lots, fine grid, then uninterrupted streets.
     svg.appendChild(lotsGroup);
@@ -202,12 +266,12 @@ export class UI {
       this.el.timeStatus.disabled = false;
       this.el.timeStatus.setAttribute('aria-label',t('shop.cycle'));
       this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
-      this.el.timeValue.textContent = t('shop.'+g.theme);
+      this.el.timeValue.textContent = t('themes.'+g.theme+'.short');
       this.el.app.dataset.phase = g.theme;
     }
 
     const phase = this.el.app.dataset.phase;
-    document.documentElement.dataset.theme = phase === 'night' ? 'dark' : phase === 'sunset' ? 'sunset' : 'light';
+    document.documentElement.dataset.theme = phase === 'night' ? 'dark' : phase === 'day' ? 'light' : phase;
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     const candidates = g.level ? getConsistentCandidates(g.level, g.observations) : [];
@@ -252,21 +316,84 @@ export class UI {
 
   showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
 
+  // Una ficha por ambiente. El texto se rehace en refreshShop, así el cambio de idioma no toca la estructura.
+  buildThemeShelf() {
+    const shelf=this.el.shopThemeShelf;
+    if(!shelf) return;
+    shelf.innerHTML='';
+    this.themeCards=THEMES.map(theme=>{
+      const card=document.createElement('article');
+      card.className='shop-item shop-theme-card';
+      card.dataset.theme=theme.id;
+      const swatch=document.createElement('div');
+      swatch.className='theme-swatch';
+      swatch.dataset.theme=theme.id;
+      swatch.setAttribute('aria-hidden','true');
+      const title=document.createElement('h3');
+      const help=document.createElement('p');
+      const price=document.createElement('strong');
+      price.className='theme-price';
+      const button=document.createElement('button');
+      button.className='modal-secondary';
+      button.type='button';
+      button.addEventListener('click',()=>{
+        if(this.game.isThemeUnlocked(theme.id)) this.game.selectTheme(theme.id);
+        else this.game.buyTheme(theme.id);
+      });
+      card.append(swatch,title,help,price,button);
+      shelf.appendChild(card);
+      return { theme, card, title, help, price, button };
+    });
+  }
+
   refreshShop() {
     if(!this.el.shopModal || this.el.shopModal.hidden) return;
     const g=this.game;
+    const locale=getLanguage()==='es'?'es-AR':'en-US';
     this.el.shopBalance.textContent=formatCount(Math.max(0,g.score),'point');
     this.el.shopLives.textContent=formatCount(g.lives,'life');
-    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.shopLifeBtn.textContent=t('actions.buyLife')+' −'+CONFIG.LIFE_COST.toLocaleString(locale);
     this.el.shopLifeBtn.disabled=g.lives>=CONFIG.STARTING_LIVES || g.score<CONFIG.LIFE_COST || g.losingLife;
     this.el.shopLifeBtn.title=t('lifePurchase.'+(g.lives>=CONFIG.STARTING_LIVES?'full':g.score<CONFIG.LIFE_COST?'poor':'ready'));
-    this.el.shopSunsetBtn.textContent=g.sunsetUnlocked?t('shop.owned'):t('shop.buy')+' −'+CONFIG.SUNSET_COST.toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
-    this.el.shopSunsetBtn.disabled=g.sunsetUnlocked || g.score<CONFIG.SUNSET_COST;
-    this.el.shopStatus.textContent=t(g.sunsetUnlocked?'shop.saved':g.score<CONFIG.SUNSET_COST?'shop.saveMore':'shop.permanent');
-    document.querySelectorAll('[data-shop-theme]').forEach(btn=>{
-      btn.disabled=btn.dataset.shopTheme==='sunset' && !g.sunsetUnlocked;
-      btn.setAttribute('aria-pressed',String(btn.dataset.shopTheme===g.theme));
-    });
+    for(const entry of this.themeCards||[]) {
+      const { theme, card, title, help, price, button } = entry;
+      const unlocked=g.isThemeUnlocked(theme.id);
+      const active=g.theme===theme.id;
+      title.textContent=t('themes.'+theme.id+'.name');
+      help.textContent=t('themes.'+theme.id+'.help');
+      price.textContent=unlocked?t('shop.owned'):'−'+theme.cost.toLocaleString(locale);
+      button.textContent=active?t('shop.inUse'):unlocked?t('shop.use'):t('shop.buy');
+      button.disabled=active || (!unlocked && g.score<theme.cost);
+      button.setAttribute('aria-pressed',String(active));
+      card.classList.toggle('is-active',active);
+      card.classList.toggle('is-locked',!unlocked);
+    }
+    const coastLocale=locale;
+    this.el.shopCoastalCard.classList.toggle('is-active',g.coastalUnlocked && g.coastalEnabled);
+    this.el.shopCoastalCard.classList.toggle('is-locked',!g.coastalUnlocked);
+    this.el.shopCoastalState.textContent=g.coastalUnlocked
+      ? t(g.coastalEnabled?'shop.coastalOn':'shop.coastalOff')
+      : '\u2212'+CONFIG.COASTAL_COST.toLocaleString(coastLocale);
+    this.el.shopCoastalBtn.textContent=g.coastalUnlocked
+      ? t(g.coastalEnabled?'shop.turnOff':'shop.turnOn')
+      : t('shop.buy');
+    this.el.shopCoastalBtn.disabled=!g.coastalUnlocked && g.score<CONFIG.COASTAL_COST;
+    this.el.shopCoastalBtn.setAttribute('aria-pressed',String(g.coastalUnlocked && g.coastalEnabled));
+
+    this.el.shopAvenueCard.classList.toggle('is-active',g.avenueUnlocked && g.avenueEnabled);
+    this.el.shopAvenueCard.classList.toggle('is-locked',!g.avenueUnlocked);
+    this.el.shopAvenueState.textContent=g.avenueUnlocked
+      ? t(g.avenueEnabled?'shop.coastalOn':'shop.coastalOff')
+      : '\u2212'+CONFIG.AVENUE_COST.toLocaleString(coastLocale);
+    this.el.shopAvenueBtn.textContent=g.avenueUnlocked
+      ? t(g.avenueEnabled?'shop.turnOff':'shop.turnOn')
+      : t('shop.buy');
+    this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
+    this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
+
+    const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
+    const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
+    this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');
   }
 
   changeLanguage(language) {
@@ -307,14 +434,19 @@ export class UI {
     this.clearClueHighlight();
 
     if (clue.visual?.kind === 'street') {
+      // El resaltado es una copia exacta del trazo de la calle —mismo ancho, mismo
+      // remate, misma geometría—, así que no puede sobresalir de los extremos ni de
+      // los cruces. Va encima de todas las calzadas y debajo de la línea cortada,
+      // para que la calle resaltada se lea continua al cruzar otras.
+      const roads = this.el.board.querySelector('#roads');
+      const firstCenter = roads?.querySelector('.road-center') || null;
       for (const key of clue.visual.streetKeys || []) {
         if (!getStreetSegments(this.game.level.map, key).length) continue;
-        const lines = this.el.board.querySelectorAll(`.road[data-street="${key}"]`);
-        for (const line of lines) {
-          line.dataset.oldStroke = line.style.stroke || '';
-          line.style.stroke = 'var(--focus)';
-          line.style.strokeWidth = '13';
-          this.streetHighlightEls.push(line);
+        for (const line of roads.querySelectorAll(`.road[data-street="${key}"]:not(.street-highlight)`)) {
+          const clone = line.cloneNode(false);
+          clone.setAttribute('class', `${line.getAttribute('class')} street-highlight`);
+          roads.insertBefore(clone, firstCenter);
+          this.streetHighlightEls.push(clone);
         }
       }
       setTimeout(() => this.clearClueHighlight(), 1800);
@@ -350,10 +482,7 @@ export class UI {
   }
 
   clearClueHighlight() {
-    for (const el of this.streetHighlightEls) {
-      el.style.stroke = el.dataset.oldStroke || '';
-      el.style.strokeWidth = '';
-    }
+    for (const el of this.streetHighlightEls) el.remove();
     this.streetHighlightEls = [];
     for (const el of this.blockHighlightEls) el.remove();
     this.blockHighlightEls = [];
@@ -374,7 +503,16 @@ export class UI {
     this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
     this.el.endQuestions.textContent = formatCount(questions,'question');
     this.el.endLives.textContent = formatCount(lives,'life');
-    this.el.newGameBtn.textContent = won ? t('shop.visit') : uiText.defeat.next;
+    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
+    this.el.shopBtn.hidden = !won;
+    this.el.shopBtn.textContent = t('shop.visit');
+    this.el.endSkipNote.hidden = !won;
+  }
+
+  // La tienda se cierra sin avanzar: vuelve la pantalla de fin de caso tal como estaba.
+  reopenEnd() {
+    const g=this.game;
+    this.showEnd(this.endResult || { won:g.lastOutcomeWon, score:g.score, questions:g.observations.length, lives:g.lives });
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
@@ -427,6 +565,11 @@ export class UI {
       line('warnings',level.map.houses.filter(h=>visualClueWarnings(level,h.clue).length).map(h=>h.id+': '+h.clue.type).join(', ')||d('none')),
       line('breaks',level.map.removedStreetSegments||0),line('grid',level.map.cols+'×'+level.map.rows)+' · '+d('missing')+' '+(level.map.missingBlocks||0),
       '',d('current'),line('questions',this.game.observations.length),line('candidates',candidates.length+'/'+m.houseCount+' · '+(candidates.join(', ')||d('none'))),
+      '',d('avenue')+': '+(this.game.avenueEnabled ? (level.avenue
+        ? t('debug.yes')+' · '+level.avenue.streetKey+' · '+d(level.avenue.orientation==='H'?'horizontal':'vertical')+' · '+Math.round(level.avenue.length)+'u · '+d(level.avenue.reason==='crosses'?'crossesCity':'outerBorder')+' · '+d('graphIntact')
+        : t('debug.no')+' · '+d('noAvenue')) : t('debug.no')),
+      '',d('coast')+': '+(level.coastSide ? t('coast.'+level.coastSide)+(coastGeometry(level.map,level.coastSide)?.pier ? ' · '+d('pier') : '') : d('none')),
+      '',d('doors')+': '+['N','S','E','W'].map(dir=>t('compass.'+dir)+' '+level.map.houses.filter(h=>h.doorFacing===dir).length).join(' · ')+' · '+d('forced')+' '+level.map.houses.filter(h=>h.frontageCount===1).length+'/'+level.map.houses.length,
       '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];
     for(const h of level.map.houses) {
@@ -436,7 +579,7 @@ export class UI {
         '  '+h.clue.type+' · '+d('family')+' '+t('families.'+clueFamily(h.clue)),
         '  '+d('predicate')+' '+h.clue.type+'('+JSON.stringify(h.clue.params)+')',
         '  '+evaluateClue(level,h.clue,level.murdererId)+' · '+d(h.id===level.murdererId?'lie':'truth')+' · '+d('inMinimum')+': '+d(sets.some(s=>s.includes(h.id))?'yes':'no'),
-        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount,
+        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount+' · '+d('door')+' '+t('compass.'+h.doorFacing)+(h.frontageCount===1?' ('+d('forced')+')':''),
         '  '+d('alone')+' '+alone.length+'/'+m.houseCount+' '+d('candidates')+': '+alone.join(', ')+' · '+d('reduces')+' '+m.informationByHouse[h.id]+' · '+d('information')+' '+Math.log2(m.houseCount/alone.length).toFixed(2)+' bits');
     }
     this.el.debugOutput.textContent=lines.join('\n');

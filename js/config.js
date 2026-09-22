@@ -16,6 +16,9 @@ export const CONFIG = {
   WRONG_ACCUSATION_COST: 300,
   STARTING_LIVES: 3,
   LIFE_COST: 3000,
+  THEME_COST: 10000,
+  COASTAL_COST: 20000,
+  AVENUE_COST: 15000,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -42,3 +45,23 @@ export const CONFIG = {
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
 };
+
+// Catálogo de ambientes. `cost: 0` significa disponible desde el principio.
+// El orden define el ciclo del botón AMBIENTE de la barra superior.
+// Versión del catálogo. Al cambiarla, los desbloqueos guardados por un catálogo
+// anterior dejan de contar: la tienda se rearmó y sus compras no se heredan.
+export const UNLOCK_NAMESPACE = 'vecindario.unlock.2.';
+
+export const THEMES = [
+  { id: 'day', cost: 0, swatch: '#f7f7f3' },
+  { id: 'night', cost: 0, swatch: '#171a1f' },
+  { id: 'sunset', cost: CONFIG.SUNSET_COST, swatch: '#e99853' },
+  { id: 'forest', cost: CONFIG.THEME_COST, swatch: '#1d3326' },
+  { id: 'midnight', cost: CONFIG.THEME_COST, swatch: '#16255c' },
+  { id: 'cherry', cost: CONFIG.THEME_COST, swatch: '#d9647d' },
+];
+
+export const THEME_IDS = THEMES.map((theme) => theme.id);
+export const FREE_THEME_IDS = THEMES.filter((theme) => theme.cost === 0).map((theme) => theme.id);
+export function themeById(id) { return THEMES.find((theme) => theme.id === id) || null; }
+export function themeCost(id) { return themeById(id)?.cost ?? 0; }

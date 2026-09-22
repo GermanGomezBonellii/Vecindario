@@ -23,8 +23,8 @@ g.observations=[];g.score=3000;g.lives=3;g.currentHour=17;
   g.pendingAccusationId='H1';await g.confirmAccusation();assert(t.accusation.wrong.includes(prompt));assert.equal(g.lives,2);assert.equal(g.level.map.houses[0].mark,'cleared');
   g.pendingAccusationId='H1';g.lives=1;await g.confirmAccusation();assert.equal(prompt,t.defeat.reveal);assert.equal(end.won,false);
   g.finished=false;g.pendingAccusationId='H2';await g.confirmAccusation();assert.equal(end.won,true);assert.equal(prompt,'');
-  const ui={el:Object.fromEntries(['endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','newGameBtn'].map(k=>[k,{}])),syncModalLock(){}};
-  for(const won of [true,false]) {api.UI.prototype.showEnd.call(ui,{won,score:1000,questions:4,lives:won?2:0});assert.equal(ui.el.endTitle.textContent,won?t.victory.title:t.defeat.title);assert.equal(elements.endReveal.hidden,won);}
+  const ui={el:Object.fromEntries(['endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','newGameBtn','shopBtn','endSkipNote'].map(k=>[k,{}])),syncModalLock(){}};
+  for(const won of [true,false]) {api.UI.prototype.showEnd.call(ui,{won,score:1000,questions:4,lives:won?2:0});assert.equal(ui.el.endTitle.textContent,won?t.victory.title:t.defeat.title);assert.equal(elements.endReveal.hidden,won);assert.equal(ui.el.shopBtn.hidden,!won);assert.equal(ui.el.endSkipNote.hidden,!won);assert.equal(ui.el.newGameBtn.textContent,won?t.victory.next:t.defeat.next);}
   const normal=html.split('<section id="debugPanel"')[0];
   assert(!/Reintentar misma seed|hipótesis|incompatibles|lógico-matemática/.test(normal));
   console.log('Copy OK: referencias, inicio, modos, selección, interrogatorio, noche, acusación, victoria, derrota y azar independiente.');
