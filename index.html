@@ -15,125 +15,133 @@
     <header class="topbar">
       <div class="brand-wrap">
         <h1 class="brand" id="brand">VECINDARIO</h1>
-        <span class="seed-label" id="seedLabel" aria-label="Seed"></span>
+        <span class="seed-label" id="seedLabel" hidden></span>
       </div>
-      <div class="statusbar" aria-label="Estado de la partida">
-        <div class="status-item"><span class="status-kicker">NIVEL</span><strong id="levelValue">1</strong></div>
-        <div class="status-item"><span class="status-kicker">PUNTOS</span><strong id="scoreValue">0</strong></div>
-        <div class="status-item"><span class="status-kicker">VIDAS</span><strong id="livesValue">● ● ●</strong></div>
-        <button class="status-item time-status theme-toggle" id="timeStatus" type="button" aria-label="Cambiar a modo nocturno"><span class="status-kicker">AMBIENTE</span><strong id="timeValue">☼ CLARO</strong></button>
-        <button id="logicToggle" class="logic-toggle" type="button" aria-expanded="false" aria-controls="debugPanel" aria-label="Abrir información lógico-matemática de esta seed">∑ <span>LÓGICA</span></button>
-        <button id="soundToggle" class="icon-button" type="button" aria-pressed="true" aria-label="Activar o desactivar sonido">◒</button>
+      <div class="statusbar" data-copy-aria="aria.status">
+        <div class="status-item"><span class="status-kicker" data-copy="labels.level"></span><strong id="levelValue">1</strong></div>
+        <div class="status-item"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></div>
+        <div class="status-item"><span class="status-kicker" data-copy="labels.lives"></span><strong id="livesValue">● ● ●</strong></div>
+        <button class="status-item time-status theme-toggle" id="timeStatus" type="button" data-copy-aria="aria.night"><span class="status-kicker" data-copy="labels.environment"></span><strong id="timeValue">☼ CLARO</strong></button>
+        <button id="logicToggle" class="logic-toggle" type="button" aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic">∑ <span data-copy="labels.logic"></span></button>
+        <div class="language-switch" role="group" data-copy-aria="aria.language">
+          <button type="button" data-language="es" data-copy-aria="aria.es" aria-pressed="true">ES</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" data-language="en" data-copy-aria="aria.en" aria-pressed="false">EN</button>
+        </div>
+        <button id="soundToggle" class="icon-button" type="button" aria-pressed="true" data-copy-aria="aria.sound">◒</button>
       </div>
     </header>
 
     <main class="layout">
-      <section class="board-shell" aria-label="Barrio">
+      <section class="board-shell" data-copy-aria="aria.board">
         <div class="board-frame">
-          <svg id="board" class="board" viewBox="0 0 1000 700" role="img" aria-label="Mapa del barrio"></svg>
-          <div class="compass" aria-label="Brújula">
+          <svg id="board" class="board" viewBox="0 0 1000 700" role="img" data-copy-aria="aria.map"></svg>
+          <div class="compass" data-copy-aria="aria.compass">
             <span class="compass-n">N</span>
             <span class="compass-e">E</span>
             <span class="compass-s">S</span>
-            <span class="compass-o">O</span>
+            <span class="compass-o" data-copy="labels.west"></span>
             <span class="compass-dot"></span>
           </div>
           <div id="phaseToast" class="phase-toast" hidden>
-            <strong id="phaseToastTitle">Ya es de noche.</strong>
-            <span id="phaseToastText">Algunos vecinos se fueron a dormir.</span>
+            <strong id="phaseToastTitle" data-copy="night.title"></strong>
+            <span id="phaseToastText" data-copy="night.text"></span>
           </div>
         </div>
       </section>
 
-      <aside class="panel" aria-label="Panel de investigación">
+      <aside class="panel" data-copy-aria="aria.panel">
         <section class="case-card">
           <div class="case-head">
-            <span class="eyebrow">INVESTIGACIÓN</span>
+            <span class="eyebrow" data-copy="labels.investigation"></span>
             <span id="modeBadge" class="mode-badge">LÓGICA PURA</span>
           </div>
-          <p id="casePrompt" class="case-prompt">Seleccioná una casa para investigar.</p>
+          <p id="casePrompt" class="case-prompt" aria-live="polite"></p>
           <blockquote id="testimony" class="testimony" hidden></blockquote>
         </section>
 
-        <section class="action-card" aria-label="Acciones">
+        <section class="action-card" data-copy-aria="aria.actions">
           <div class="selected-row">
-            <span class="eyebrow">CASA SELECCIONADA</span>
-            <span id="selectedState" class="selected-state">NINGUNA</span>
+            <span class="eyebrow" data-copy="labels.selected"></span>
+            <span id="selectedState" class="selected-state" data-copy="labels.none"></span>
           </div>
           <div class="action-grid">
-            <button id="interrogateBtn" class="action primary" type="button" disabled>Interrogar</button>
-            <button id="suspectBtn" class="action" type="button" disabled>Marcar sospechoso</button>
-            <button id="clearBtn" class="action" type="button" disabled>Descartar</button>
-            <button id="accuseBtn" class="action danger" type="button" disabled>Acusar</button>
+            <button id="interrogateBtn" class="action primary" type="button" disabled data-copy="actions.interrogate"></button>
+            <button id="suspectBtn" class="action" type="button" disabled data-copy="actions.suspect"></button>
+            <button id="clearBtn" class="action" type="button" disabled data-copy="actions.clear"></button>
+            <button id="accuseBtn" class="action danger" type="button" disabled data-copy="actions.accuse"></button>
           </div>
-          <button id="hintBtn" class="hint-button" type="button">Pedir una pista <span>−500</span></button>
+          <button id="hintBtn" class="hint-button" type="button"><span data-copy="actions.help"></span> <span>−500</span></button>
         </section>
 
-        <section class="legend" aria-label="Leyenda">
-          <div><i class="swatch swatch-unasked"></i><span>Sin interrogar</span></div>
-          <div><i class="swatch swatch-asked"></i><span>Interrogado</span></div>
-          <div><i class="swatch swatch-suspect"></i><span>Sospechoso</span></div>
-          <div><i class="swatch swatch-cleared"></i><span>Descartado</span></div>
+        <section class="legend" data-copy-aria="aria.legend">
+          <div><i class="swatch swatch-unasked"></i><span data-copy="labels.unaskedLegend"></span></div>
+          <div><i class="swatch swatch-asked"></i><span data-copy="labels.askedLegend"></span></div>
+          <div><i class="swatch swatch-suspect"></i><span data-copy="labels.suspectLegend"></span></div>
+          <div><i class="swatch swatch-cleared"></i><span data-copy="labels.clearedLegend"></span></div>
         </section>
       </aside>
     </main>
 
     <div id="startModal" class="modal-backdrop">
       <section class="modal start-modal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
-        <span class="eyebrow" id="startLevelLabel">NIVEL 1 · UN ASESINO. UN MENTIROSO.</span>
-        <h2 id="startTitle">¿Cómo querés investigar?</h2>
-        <p>Todos dicen la verdad excepto el asesino. Interrogá lo menos posible y acusá cuando la lógica cierre.</p>
+        <span class="eyebrow" id="startLevelLabel"></span>
+        <p><strong data-copy="intro.headline"></strong><br><span data-copy="intro.rule"></span></p>
+        <h2 id="startTitle" data-copy="intro.title"></h2>
+        <p data-copy="intro.support"></p>
         <div class="mode-options">
           <button class="mode-option is-selected" type="button" data-mode="normal">
-            <strong>Lógica pura</strong>
-            <span>El tablero no descarta nada por vos.</span>
+            <strong data-copy="intro.normal"></strong>
+            <span data-copy="intro.normalHelp"></span>
           </button>
           <button class="mode-option" type="button" data-mode="assist">
-            <strong>Asistencia</strong>
-            <span>Las hipótesis incompatibles se apagan solas.</span>
+            <strong data-copy="intro.assist"></strong>
+            <span data-copy="intro.assistHelp"></span>
           </button>
         </div>
-        <button id="startBtn" class="modal-primary" type="button">Comenzar</button>
+        <button id="startBtn" class="modal-primary" type="button" data-copy="intro.start"></button>
       </section>
     </div>
 
     <div id="accuseModal" class="modal-backdrop" hidden>
       <section class="modal compact" role="dialog" aria-modal="true" aria-labelledby="accuseTitle">
-        <span class="eyebrow">ACUSACIÓN</span>
-        <h2 id="accuseTitle">¿Acusar a este vecino?</h2>
-        <p>Una acusación incorrecta cuesta una vida.</p>
+        <span class="eyebrow" data-copy="labels.accusation"></span>
+        <h2 id="accuseTitle" data-copy="accusation.title"></h2>
+        <p data-copy="accusation.support"></p>
         <div class="modal-actions">
-          <button id="cancelAccuseBtn" class="modal-secondary" type="button">Cancelar</button>
-          <button id="confirmAccuseBtn" class="modal-primary danger-fill" type="button">Comprobar</button>
+          <button id="cancelAccuseBtn" class="modal-secondary" type="button" data-copy="accusation.back"></button>
+          <button id="confirmAccuseBtn" class="modal-primary danger-fill" type="button" data-copy="accusation.confirm"></button>
         </div>
       </section>
     </div>
 
     <div id="endModal" class="modal-backdrop" hidden>
       <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="endTitle">
-        <span class="eyebrow" id="endEyebrow">CASO RESUELTO</span>
-        <h2 id="endTitle">Encontraste al asesino.</h2>
+        <span class="eyebrow" id="endEyebrow" hidden></span>
+        <h2 id="endTitle"></h2>
+        <p id="endMessage"></p>
+        <p id="endReveal" data-copy="defeat.reveal" hidden></p>
         <div class="end-stats">
-          <div><span>Puntos</span><strong id="endScore">0</strong></div>
-          <div><span>Interrogatorios</span><strong id="endQuestions">0</strong></div>
-          <div><span>Vidas</span><strong id="endLives">0</strong></div>
+          <div><strong id="endScore">0</strong></div>
+          <div><strong id="endQuestions">0</strong></div>
+          <div><strong id="endLives">0</strong></div>
         </div>
         <div class="modal-actions stacked-mobile">
-          <button id="retryBtn" class="modal-secondary" type="button">Reintentar misma seed</button>
-          <button id="newGameBtn" class="modal-primary" type="button">Nuevo barrio</button>
+          <button id="retryBtn" class="modal-secondary" type="button" data-copy="defeat.retry"></button>
+          <button id="newGameBtn" class="modal-primary" type="button" data-copy="defeat.next"></button>
         </div>
       </section>
     </div>
 
     <section id="debugPanel" class="debug-panel" hidden>
       <div class="debug-head">
-        <strong>LÓGICA DE SEED <small>· DESARROLLO / SPOILERS</small></strong>
-        <button id="debugClose" type="button" aria-label="Cerrar panel lógico">×</button>
+        <strong><span data-copy="labels.debug"></span> <small data-copy="labels.spoilers"></small></strong>
+        <button id="debugClose" type="button" data-copy-aria="aria.close">×</button>
       </div>
       <pre id="debugOutput"></pre>
       <div class="debug-actions">
-        <button id="debug100" type="button">GENERAR 100 NIVELES</button>
-        <button id="debugTimed" type="button">DEMO NOCHE</button>
+        <button id="debug100" type="button" data-copy="labels.batch"></button>
+        <button id="debugTimed" type="button" data-copy="labels.demo"></button>
       </div>
       <pre id="debugBatchOutput"></pre>
     </section>

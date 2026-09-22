@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),assert=require('node:assert/strict');
-const code=['config','rng','map','clues','solver','generator'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const code=['config','copy','clue-copy','rng','map','clues','solver','generator'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const api=vm.runInNewContext(code+'\n({generateLevel,validateGeneratedLevel,visualClueWarnings,houseSizeCounts,evaluateClue,getConsistentCandidates})');
 let total=0;
 for(const levelNumber of [1,2,3,4,5,6,7,8,10,14,20]) {

@@ -44,6 +44,161 @@ const CONFIG = {
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
 };
 
+// ---- copy.js ----
+// Presentation only. Never pass game state or the procedural RNG to this picker.
+const spanishCopy = {
+  intro: { level:n=>`NIVEL ${n}`, headline:'HAY UN ASESINO EN EL BARRIO.', rule:'Todos dicen la verdad. Menos él.', title:'¿Cómo querés investigar?', support:'Interrogá a los vecinos. Encontrá al único que miente.', normal:'Lógica pura', normalHelp:'Nadie va a descartar casas por vos.', assist:'Asistencia', assistHelp:'Las casas imposibles se irán apagando.', start:'Comenzar' },
+  investigation: { entry:'Elegí una casa. Alguien ahí sabe algo.', assist:'Elegí una casa. Las contradicciones se irán apagando.', select:'¿Qué querés hacer acá?', asked:'Ya hablaste con este vecino.', unavailable:'Nadie responde.', unavailableNight:'Las luces están apagadas. Nadie responde.', timed:'Cada interrogatorio lleva una hora. No todas las puertas seguirán abiertas.' },
+  interrogationOpeners:['El vecino dice:', 'Desde la puerta te dice:', 'Después de pensarlo, responde:', 'Antes de cerrar la puerta, dice:', 'Te asegura:'],
+  help: { suggest:'Algo te dice que conviene tocar esta puerta.', empty:'Por ahora, no hay nadie más a quien preguntar.', closed:'Los vecinos que quedan ya no atienden.' },
+  accusation: { title:'¿Esta es la casa?', support:'Si te equivocás, perdés una vida.', back:'VOLVER', confirm:'ACUSAR', wrong:['Casa equivocada. El asesino sigue en el barrio.', 'Te equivocaste. Ahí no vive el asesino.'] },
+  victory: { title:'CASO RESUELTO', text:'Encontraste al único vecino que mentía.', next:'SIGUIENTE BARRIO' },
+  defeat: { title:'CASO SIN RESOLVER', text:'Acusaste tres veces a la persona equivocada.', reveal:'El asesino vivía acá.', retry:'VOLVER A INVESTIGAR', next:'NUEVO BARRIO' },
+  night: { title:'CAYÓ LA NOCHE', text:'Algunas luces se apagaron. No todos van a atenderte ahora.' },
+  actions: { interrogate:'Interrogar', suspect:'Sospechoso', unmark:'Quitar marca', clear:'Descartar', unclear:'Quitar descarte', accuse:'Acusar', help:'Pedir ayuda' },
+};
+
+function pickDecorativeText(pool) {
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function applyCopy(root) {
+  root.querySelectorAll('[data-copy]').forEach(el=>{
+    el.textContent=t(el.dataset.copy);
+  });
+  root.querySelectorAll('[data-copy-aria]').forEach(el=>el.setAttribute('aria-label',t(el.dataset.copyAria)));
+  root.querySelectorAll('[data-copy-title]').forEach(el=>el.setAttribute('title',t(el.dataset.copyTitle)));
+}
+
+const englishCopy = {
+  intro:{level:n=>`LEVEL ${n}`,headline:"THERE'S A MURDERER IN THE NEIGHBORHOOD.",rule:'Everyone tells the truth. Except them.',title:'How do you want to investigate?',support:"Question the neighbors. Find the only one who's lying.",normal:'Pure logic',normalHelp:'No houses will be ruled out for you.',assist:'Assisted',assistHelp:'Impossible houses will fade out automatically.',start:'Start'},
+  investigation:{entry:'Choose a house. Someone there knows something.',assist:'Choose a house. Contradictions will fade out.',select:'What do you want to do here?',asked:"You've already talked to this neighbor.",unavailable:'No one answers.',unavailableNight:'The lights are off. No one answers.',timed:'Each question takes an hour. Not every door will stay open.'},
+  interrogationOpeners:['The neighbor says:','From the doorway, they tell you:','After thinking for a moment, they answer:','Before closing the door, they say:','They assure you:'],
+  help:{suggest:'Something tells you this door is worth knocking on.',empty:"For now, there's no one else to question.",closed:"The remaining neighbors aren't answering anymore."},
+  accusation:{title:'Is this the house?',support:"If you're wrong, you lose a life.",back:'BACK',confirm:'ACCUSE',wrong:['Wrong house. The murderer is still in the neighborhood.',"You were wrong. The murderer doesn't live there."]},
+  victory:{title:'CASE SOLVED',text:'You found the only neighbor who was lying.',next:'NEXT NEIGHBORHOOD'},
+  defeat:{title:'CASE UNSOLVED',text:'You accused the wrong person three times.',reveal:'The murderer lived here.',retry:'INVESTIGATE AGAIN',next:'NEW NEIGHBORHOOD'},
+  night:{title:'NIGHT HAS FALLEN',text:'Some lights have gone out. Not everyone will answer now.'},
+  actions:{interrogate:'Question',suspect:'Suspect',unmark:'Remove mark',clear:'Rule out',unclear:'Undo rule out',accuse:'Accuse',help:'Ask for help'},
+};
+
+spanishCopy.labels={level:'NIVEL',points:'PUNTOS',lives:'VIDAS',environment:'AMBIENTE',hour:'HORA',light:'☼ CLARO',night:'☾ NOCHE',logic:'LÓGICA',investigation:'INVESTIGACIÓN',selected:'CASA SELECCIONADA',none:'NINGUNA',unavailable:'NO DISPONIBLE',asked:'INTERROGADA',suspect:'SOSPECHOSA',cleared:'DESCARTADA',chosen:'SELECCIONADA',unaskedLegend:'Sin interrogar',askedLegend:'Interrogado',suspectLegend:'Sospechoso',clearedLegend:'Descartado',accusation:'ACUSACIÓN',questions:'Interrogatorios',remainingLives:'Vidas restantes',west:'O',debug:'LÓGICA DE SEED',spoilers:'DESARROLLO / SPOILERS',batch:'GENERAR 100 NIVELES',demo:'DEMO NOCHE'};
+englishCopy.labels={level:'LEVEL',points:'POINTS',lives:'LIVES',environment:'THEME',hour:'TIME',light:'☼ LIGHT',night:'☾ NIGHT',logic:'LOGIC',investigation:'INVESTIGATION',selected:'SELECTED HOUSE',none:'NONE',unavailable:'UNAVAILABLE',asked:'QUESTIONED',suspect:'SUSPECT',cleared:'RULED OUT',chosen:'SELECTED',unaskedLegend:'Not questioned',askedLegend:'Questioned',suspectLegend:'Suspect',clearedLegend:'Ruled out',accusation:'ACCUSATION',questions:'Questions',remainingLives:'Lives remaining',west:'W',debug:'SEED LOGIC',spoilers:'DEVELOPMENT / SPOILERS',batch:'GENERATE 100 LEVELS',demo:'NIGHT DEMO'};
+spanishCopy.aria={status:'Estado de la partida',light:'Cambiar a modo claro',night:'Cambiar a modo nocturno',logic:'Abrir panel lógico',sound:'Activar o desactivar sonido',board:'Barrio',map:'Mapa del barrio',compass:'Brújula',panel:'Panel de investigación',actions:'Acciones',legend:'Leyenda',close:'Cerrar panel lógico',house:'Casa',time:'Hora de la investigación',language:'Idioma',es:'Cambiar a español',en:'Cambiar a inglés'};
+englishCopy.aria={status:'Game status',light:'Switch to light mode',night:'Switch to night mode',logic:'Open logic panel',sound:'Toggle sound',board:'Neighborhood',map:'Neighborhood map',compass:'Compass',panel:'Investigation panel',actions:'Actions',legend:'Legend',close:'Close logic panel',house:'House',time:'Investigation time',language:'Language',es:'Switch to Spanish',en:'Switch to English'};
+spanishCopy.units={question:['interrogatorio','interrogatorios'],life:['vida','vidas'],point:['punto','puntos'],block:['cuadra','cuadras']};
+englishCopy.units={question:['question','questions'],life:['life','lives'],point:['point','points'],block:['block','blocks']};
+spanishCopy.error={title:'No se pudo abrir el barrio.',retry:'Probá recargar la página.'};
+englishCopy.error={title:'The neighborhood could not be opened.',retry:'Try reloading the page.'};
+const translations={es:spanishCopy,en:englishCopy};
+const debugWords={
+  seed:['SEED','SEED'],level:['NIVEL','LEVEL'],houses:['casas','houses'],murderer:['ASESINO REAL','ACTUAL MURDERER'],minimum:['PREGUNTAS MÍNIMAS','MINIMUM QUESTIONS'],sets:['CONJUNTOS MÍNIMOS POSIBLES','MINIMUM SOLVING SETS'],single:['REGLA: UNA PISTA NO RESUELVE','RULE: ONE CLUE CANNOT SOLVE'],reduction:['REDUCCIÓN MEDIA POR PISTA','AVERAGE REDUCTION PER CLUE'],redundancy:['REDUNDANCIA','REDUNDANCY'],families:['DISTRIBUCIÓN DE FAMILIAS','CLUE FAMILY DISTRIBUTION'],minFamilies:['FAMILIAS EN SOLUCIONES MÍNIMAS','FAMILIES IN MINIMUM SOLUTIONS'],compound:['COMPUESTAS','COMPOUND CLUES'],complexity:['COMPLEJIDAD MEDIA','AVERAGE COMPLEXITY'],areas:['ÁREAS DE CASAS','HOUSE AREAS'],sizes:['TAMAÑOS','SIZES'],lots:['lotes','lots'],properties:['PROPIEDADES GEOMÉTRICAS','GEOMETRIC PROPERTIES'],unique:['ÚNICA','UNIQUE'],uniqueProperties:['PROPIEDADES ÚNICAS','UNIQUE PROPERTIES'],warnings:['ALERTAS VISUALES','VISUAL WARNINGS'],none:['ninguna','none'],breaks:['TRAMOS INTERRUMPIDOS','MISSING STREET SEGMENTS'],grid:['TRAMA','GRID'],missing:['manzanas ausentes','missing blocks'],current:['ESTADO ACTUAL','CURRENT STATE'],questions:['interrogatorios','questions'],candidates:['CANDIDATOS ACTUALES','CURRENT CANDIDATES'],examples:['EJEMPLOS DE CONJUNTOS MÍNIMOS (HASTA 6)','MINIMUM SET EXAMPLES (UP TO 6)'],houseInfo:['INFORMACIÓN POR CASA','INFORMATION BY HOUSE'],lie:['MENTIRA','LIE'],truth:['VERDAD','TRUTH'],asked:['interrogada','questioned'],family:['familia','family'],predicate:['predicado','predicate'],inMinimum:['en conjunto mínimo','in minimum set'],yes:['sí','yes'],no:['no','no'],house:['casa','house'],area:['área','area'],fronts:['frentes','street-facing sides'],alone:['sola deja','alone leaves'],reduces:['reduce','reduces'],information:['información','information'],validating:['Validando…','Validating…'],tests:['pruebas internas','internal tests'],generated:['generados','generated'],valid:['válidos','valid'],invalid:['inválidos','invalid'],failed:['seeds fallidas','failed seeds'],reasons:['motivos','reasons'],
+};
+spanishCopy.debug=Object.fromEntries(Object.entries(debugWords).map(([k,v])=>[k,v[0]]));
+englishCopy.debug=Object.fromEntries(Object.entries(debugWords).map(([k,v])=>[k,v[1]]));
+spanishCopy.families={direction:'Dirección',distance:'Distancia',street:'Calle',size:'Tamaño',orientation:'Forma',frontage:'Frentes',relative:'Posición respecto de calles',streetOrientation:'Orientación de calles',space:'Espacio libre',compound:'Compuesta',topology:'Recorrido'};
+englishCopy.families={direction:'Direction',distance:'Distance',street:'Street',size:'Size',orientation:'Shape',frontage:'Street-facing sides',relative:'Position relative to streets',streetOrientation:'Street orientation',space:'Open space',compound:'Compound',topology:'Route'};
+spanishCopy.properties={horizontal:'horizontal larga',vertical:'vertical larga',square:'cuadrada',elongated:'alargada',multiple:'más de un lote',area1:'1 lote',area2:'2 lotes',area3:'3 lotes',area4:'4 lotes'};
+englishCopy.properties={horizontal:'long horizontal',vertical:'long vertical',square:'square',elongated:'elongated',multiple:'more than one lot',area1:'1 lot',area2:'2 lots',area3:'3 lots',area4:'4 lots'};
+let language='es';
+try { if(localStorage.getItem('vecindario.language')==='en') language='en'; } catch (_) {}
+function getLanguage(){return language;}
+function setLanguage(next){
+  if(!['es','en'].includes(next)) return;
+  language=next;
+  try {localStorage.setItem('vecindario.language',next);} catch (_) {}
+  if(typeof document!=='undefined') document.documentElement.lang=next;
+}
+function t(key,params={},lang=language){
+  const lookup=obj=>key.split('.').reduce((v,k)=>v?.[k],obj);
+  let value=lookup(translations[lang]);
+  if(value===undefined){console.warn(`Missing translation: ${lang}:${key}`);value=lookup(translations.es);}
+  if(value===undefined){console.error(`Missing translation in all locales: ${key}`);return '…';}
+  if(typeof value==='function') return value(params.n);
+  if(typeof value==='string') return value.replace(/\{(\w+)\}/g,(_,k)=>params[k]??'');
+  return value;
+}
+function formatCount(n,unit,lang=language){return `${Number(n).toLocaleString(lang==='es'?'es-AR':'en-US')} ${t(`units.${unit}`,{},lang)[n===1?0:1]}`;}
+// Compatibility view: consumers still request semantic keys, never match translated text.
+const uiText=new Proxy({}, {get:(_,key)=>translations[language][key]});
+function pickDecorativeKey(key){return `${key}.${Math.floor(Math.random()*t(key).length)}`;}
+
+// ---- clue-copy.js ----
+
+const clueTranslations={es:{
+  direction:['Está al {direction} de mi casa.','Yo miraría al {direction} de mi casa.','Desde mi casa queda hacia el {direction}.'],
+  withinDistance:['Está a {distance} o menos de acá.','No está a más de {distance}.'],
+  fartherThan:['Está a más de {distance} de acá.','No lo busques a {distance} o menos.'],
+  onStreet:['Está sobre esta calle.','Vive junto a esta calle.','Su lote mira a esta calle.','Buscalo sobre esta calle.'],
+  notOnStreet:['No vive sobre esta calle.','Su lote no mira a esta calle.','No está junto a esta calle.','No lo busques sobre esta calle.'],
+  AREA_GREATER_THAN_SPEAKER:['Su casa es más grande que la mía.','Tiene más terreno construido que yo.'],
+  AREA_SMALLER_THAN_SPEAKER:['Su casa es más chica que la mía.','Tiene menos terreno construido que yo.'],
+  AREA_EQUAL_TO_SPEAKER:['Su casa ocupa lo mismo que la mía.'],
+  HOUSE_HORIZONTAL:['Su casa se extiende más de este a oeste.'],
+  HOUSE_VERTICAL:['Su casa se extiende más de norte a sur.'],
+  HOUSE_SQUARE:['Su casa tiene forma cuadrada.'],
+  HOUSE_ELONGATED:['El lado largo de su casa mide al menos el doble que el corto.'],
+  FRONTAGE_COUNT_GREATER_THAN:['Su casa tiene más de un frente a la calle.'],
+  FRONTAGE_COUNT_EQUALS:['Su casa tiene un solo frente a la calle.'],
+  FACES_MORE_THAN_ONE_STREET:['Su casa mira a más de una calle.'],
+  CORNER_HOUSE:['Su casa da a dos calles que forman una esquina.'],
+  HAS_FREE_ADJACENT_SPACE:['Tiene algún lote libre pegado a su casa, dentro de su manzana.'],
+  HAS_MULTIPLE_FREE_SIDES:['Tiene lotes libres junto a por lo menos dos lados de su casa, en su manzana.'],
+  MORE_OPEN_SPACE_THAN_SPEAKER:['Dentro de su manzana, tiene más lotes libres pegados a la casa que yo.'],
+  SPANS_MULTIPLE_GRID_CELLS:['Su casa ocupa más de un cuadrado de la retícula.'],
+  SAME_SIDE_OF_STREET:['Su casa está del mismo lado de esta calle que la mía.'],
+  OPPOSITE_SIDE_OF_STREET:['Su casa está del otro lado de esta calle respecto de la mía.'],
+  FACES_PARALLEL_STREET:['Su casa da a otra calle paralela a esta.'],
+  FACES_PERPENDICULAR_STREET:['Su casa da a una calle perpendicular a esta.'],
+  BETWEEN_TWO_STREETS:['Su casa está entre estas dos calles.'],
+  REACHABLE_WITHOUT_TURNING:['Podrías llegar hasta ahí sin doblar.'],
+  REQUIRES_TURN:['En algún momento vas a tener que doblar.'],
+  AND:['{a} y {b}'], OR:['{a} o {b}'],
+},en:{
+  direction:['They live {direction} of my house.',"I'd look {direction} of my house.",'From my house, head {direction}.'],
+  withinDistance:["They're {distance} away or less.","They're no more than {distance} away."],
+  fartherThan:["They're more than {distance} away.","Don't look within {distance} of here."],
+  onStreet:['They live on this street.','They live beside this street.','Their lot faces this street.','Look for them on this street.'],
+  notOnStreet:["They don't live on this street.","Their lot doesn't face this street.","They don't live beside this street.","Don't look for them on this street."],
+  AREA_GREATER_THAN_SPEAKER:['Their house is bigger than mine.','Their house covers more land than mine.'],
+  AREA_SMALLER_THAN_SPEAKER:['Their house is smaller than mine.','Their house covers less land than mine.'],
+  AREA_EQUAL_TO_SPEAKER:['Their house covers the same area as mine.'],
+  HOUSE_HORIZONTAL:['Their house extends farther east to west than north to south.'],
+  HOUSE_VERTICAL:['Their house extends farther north to south than east to west.'],
+  HOUSE_SQUARE:['Their house is square.'],
+  HOUSE_ELONGATED:['The long side of their house is at least twice the short side.'],
+  FRONTAGE_COUNT_GREATER_THAN:['More than one side of their house faces a street.'],
+  FRONTAGE_COUNT_EQUALS:['Only one side of their house faces a street.'],
+  FACES_MORE_THAN_ONE_STREET:['Their house faces more than one street.'],
+  CORNER_HOUSE:['Their house faces two streets that form a corner.'],
+  HAS_FREE_ADJACENT_SPACE:['An empty lot touches their house within their block.'],
+  HAS_MULTIPLE_FREE_SIDES:['Empty lots touch at least two sides of their house within their block.'],
+  MORE_OPEN_SPACE_THAN_SPEAKER:['Within their block, more empty lots touch their house than mine.'],
+  SPANS_MULTIPLE_GRID_CELLS:['Their house covers more than one grid square.'],
+  SAME_SIDE_OF_STREET:['Their house is on the same side of this street as mine.'],
+  OPPOSITE_SIDE_OF_STREET:['Their house is on the opposite side of this street from mine.'],
+  FACES_PARALLEL_STREET:['Their house faces another street parallel to this one.'],
+  FACES_PERPENDICULAR_STREET:['Their house faces a street perpendicular to this one.'],
+  BETWEEN_TWO_STREETS:['Their house is between these two streets.'],
+  REACHABLE_WITHOUT_TURNING:['You could get there without making a turn.'],
+  REQUIRES_TURN:["You'll have to make a turn at some point."],
+  AND:['{a} and {b}'], OR:['{a} or {b}'],
+}};
+function renderClue(clue,language=getLanguage()){
+  const variant=clue.variant??0;
+  let template=clueTranslations[language]?.[clue.type]?.[variant];
+  if(template===undefined){console.warn(`Missing clue translation: ${language}:${clue.type}:${variant}`);template=clueTranslations.es[clue.type]?.[variant];}
+  if(template===undefined){console.error(`Unknown clue text: ${clue.type}:${variant}`);return '…';}
+  if(clue.type==='AND'||clue.type==='OR') {
+    const [a,b]=clue.params.parts.map(p=>renderClue(p,language));
+    return template.replace('{a}',a.replace(/\.$/,'')).replace('{b}',b[0].toLowerCase()+b.slice(1));
+  }
+  const n=clue.params.max??clue.params.min;
+  const distance=language==='es'?(n===1?'una cuadra':`${n} cuadras`):`${n} ${n===1?'block':'blocks'}`;
+  const direction=language==='es'?({north:'norte',south:'sur',east:'este',west:'oeste'}[clue.params.direction]):clue.params.direction;
+  return template.replace('{direction}',direction??'').replace('{distance}',distance);
+}
+
 // ---- rng.js ----
 function hashString(str) {
   let h = 2166136261 >>> 0;
@@ -418,12 +573,7 @@ function phaseForHour(hour, config) {
 
 // ---- clues.js ----
 
-const DIRECTION_TEXT = {
-  north: ['Está al norte de mi casa.', 'Yo miraría al norte de mi casa.', 'Desde mi casa queda hacia el norte.'],
-  south: ['Está al sur de mi casa.', 'Yo miraría al sur de mi casa.', 'Desde mi casa queda hacia el sur.'],
-  east: ['Está al este de mi casa.', 'Yo miraría al este de mi casa.', 'Desde mi casa queda hacia el este.'],
-  west: ['Está al oeste de mi casa.', 'Yo miraría al oeste de mi casa.', 'Desde mi casa queda hacia el oeste.'],
-};
+const DIRECTION_TEXT = Object.fromEntries(['north','south','east','west'].map(direction=>[direction,clueTranslations.es.direction]));
 
 function evalDirection(level, speaker, candidate, direction) {
   const eps = 0.5;
@@ -467,21 +617,21 @@ const CLUE_TYPES = {
 
 // Registry: text variants share one exact predicate; the solver never reads text.
 const PROPERTY_CLUES = {
-  AREA_GREATER_THAN_SPEAKER: ['size', (c,s)=>c.area>s.area, ['Su casa es más grande que la mía.', 'Tiene más terreno construido que yo.']],
-  AREA_SMALLER_THAN_SPEAKER: ['size', (c,s)=>c.area<s.area, ['Su casa es más chica que la mía.', 'Tiene menos terreno construido que yo.']],
-  AREA_EQUAL_TO_SPEAKER: ['size', (c,s)=>c.area===s.area, ['Su casa ocupa lo mismo que la mía.']],
-  HOUSE_HORIZONTAL: ['orientation', c=>c.isHorizontal, ['Su casa se extiende más de este a oeste.']],
-  HOUSE_VERTICAL: ['orientation', c=>c.isVertical, ['Su casa se extiende más de norte a sur.']],
-  HOUSE_SQUARE: ['orientation', c=>c.isSquare, ['Su casa tiene forma cuadrada.']],
-  HOUSE_ELONGATED: ['orientation', c=>c.isElongated, ['El lado largo de su casa mide al menos el doble que el corto.']],
-  FRONTAGE_COUNT_GREATER_THAN: ['frontage', (c,s,p)=>c.frontageCount>p.count, ['Su casa tiene más de un frente a la calle.']],
-  FRONTAGE_COUNT_EQUALS: ['frontage', (c,s,p)=>c.frontageCount===p.count, ['Su casa tiene un solo frente a la calle.']],
-  FACES_MORE_THAN_ONE_STREET: ['frontage', c=>c.adjacentStreetKeys.length>1, ['Su casa mira a más de una calle.']],
-  CORNER_HOUSE: ['frontage', c=>c.touchesCorner, ['Su casa da a dos calles que forman una esquina.']],
-  HAS_FREE_ADJACENT_SPACE: ['space', c=>c.freeAdjacentCells>0, ['Tiene algún lote libre pegado a su casa, dentro de su manzana.']],
-  HAS_MULTIPLE_FREE_SIDES: ['space', c=>c.freeSides>=2, ['Tiene lotes libres junto a por lo menos dos lados de su casa, en su manzana.']],
-  MORE_OPEN_SPACE_THAN_SPEAKER: ['space', (c,s)=>c.freeAdjacentCells>s.freeAdjacentCells, ['Dentro de su manzana, tiene más lotes libres pegados a la casa que yo.']],
-  SPANS_MULTIPLE_GRID_CELLS: ['size', c=>c.area>1, ['Su casa ocupa más de un cuadrado de la retícula.']],
+  AREA_GREATER_THAN_SPEAKER: ['size', (c,s)=>c.area>s.area, clueTranslations.es.AREA_GREATER_THAN_SPEAKER],
+  AREA_SMALLER_THAN_SPEAKER: ['size', (c,s)=>c.area<s.area, clueTranslations.es.AREA_SMALLER_THAN_SPEAKER],
+  AREA_EQUAL_TO_SPEAKER: ['size', (c,s)=>c.area===s.area, clueTranslations.es.AREA_EQUAL_TO_SPEAKER],
+  HOUSE_HORIZONTAL: ['orientation', c=>c.isHorizontal, clueTranslations.es.HOUSE_HORIZONTAL],
+  HOUSE_VERTICAL: ['orientation', c=>c.isVertical, clueTranslations.es.HOUSE_VERTICAL],
+  HOUSE_SQUARE: ['orientation', c=>c.isSquare, clueTranslations.es.HOUSE_SQUARE],
+  HOUSE_ELONGATED: ['orientation', c=>c.isElongated, clueTranslations.es.HOUSE_ELONGATED],
+  FRONTAGE_COUNT_GREATER_THAN: ['frontage', (c,s,p)=>c.frontageCount>p.count, clueTranslations.es.FRONTAGE_COUNT_GREATER_THAN],
+  FRONTAGE_COUNT_EQUALS: ['frontage', (c,s,p)=>c.frontageCount===p.count, clueTranslations.es.FRONTAGE_COUNT_EQUALS],
+  FACES_MORE_THAN_ONE_STREET: ['frontage', c=>c.adjacentStreetKeys.length>1, clueTranslations.es.FACES_MORE_THAN_ONE_STREET],
+  CORNER_HOUSE: ['frontage', c=>c.touchesCorner, clueTranslations.es.CORNER_HOUSE],
+  HAS_FREE_ADJACENT_SPACE: ['space', c=>c.freeAdjacentCells>0, clueTranslations.es.HAS_FREE_ADJACENT_SPACE],
+  HAS_MULTIPLE_FREE_SIDES: ['space', c=>c.freeSides>=2, clueTranslations.es.HAS_MULTIPLE_FREE_SIDES],
+  MORE_OPEN_SPACE_THAN_SPEAKER: ['space', (c,s)=>c.freeAdjacentCells>s.freeAdjacentCells, clueTranslations.es.MORE_OPEN_SPACE_THAN_SPEAKER],
+  SPANS_MULTIPLE_GRID_CELLS: ['size', c=>c.area>1, clueTranslations.es.SPANS_MULTIPLE_GRID_CELLS],
 };
 for (const [type, [family, predicate]] of Object.entries(PROPERTY_CLUES)) {
   CLUE_TYPES[type] = { family, evaluate:(level,clue,candidate)=>predicate(candidate,getHouseById(level,clue.speakerId),clue.params) };
@@ -584,97 +734,55 @@ function evaluateClue(level, clue, candidateId) {
   return Boolean(type.evaluate(level, clue, candidate));
 }
 
+// Stable semantic wording key: no translated text participates in generation.
+function clueWordingKey(clue) {
+  if (['AND','OR'].includes(clue.type)) return clue.type+':'+clue.params.parts.map(clueWordingKey).join('|');
+  return [clue.type,clue.variant??0,clue.params.direction??'',clue.params.max??clue.params.min??''].join(':');
+}
+
 function enumerateClueOptions(level, speakerId) {
-  const speaker = getHouseById(level, speakerId);
-  const options = [];
-
-  for (const direction of ['north', 'south', 'east', 'west']) {
-    DIRECTION_TEXT[direction].forEach((text, variant) => {
-      options.push({
-        type: 'direction', speakerId,
-        params: { direction },
-        text,
-        variant,
-        signature: `direction:${direction}:${variant}`,
-        visual: { kind: 'direction', direction },
-      });
-    });
-  }
-
-  for (const max of [1, 2, 3, 4]) {
-    const texts = [
-      `Está a ${max === 1 ? 'una cuadra' : `${max} cuadras`} o menos de acá.`,
-      `No está a más de ${max === 1 ? 'una cuadra' : `${max} cuadras`}.`,
-    ];
-    texts.forEach((text, variant) => options.push({
-      type: 'withinDistance', speakerId, params: { max }, text, variant,
-      signature: `within:${max}:${variant}`, visual: { kind: 'radius', max },
-    }));
-  }
-
-  for (const min of [1, 2, 3]) {
-    const texts = [
-      `Está a más de ${min === 1 ? 'una cuadra' : `${min} cuadras`} de acá.`,
-      `No lo busques a ${min === 1 ? 'una cuadra' : `${min} cuadras`} o menos.`,
-    ];
-    texts.forEach((text, variant) => options.push({
-      type: 'fartherThan', speakerId, params: { min }, text, variant,
-      signature: `farther:${min}:${variant}`, visual: { kind: 'radius', min },
-    }));
-  }
-
-  for (const streetKey of speaker.adjacentStreetKeys) {
-    [
-      'Está sobre esta calle.',
-      'Vive junto a esta calle.',
-      'Su lote mira a esta calle.',
-      'Buscalo sobre esta calle.',
-    ].forEach((text, variant) => options.push({
-      type: 'onStreet', speakerId, params: { streetKey }, text, variant,
-      signature: `onStreet:${streetKey}:${variant}`,
-      visual: { kind: 'street', streetKeys: [streetKey] },
-    }));
-    [
-      'No vive sobre esta calle.',
-      'Su lote no mira a esta calle.',
-      'No está junto a esta calle.',
-      'No lo busques sobre esta calle.',
-    ].forEach((text, variant) => options.push({
-      type: 'notOnStreet', speakerId, params: { streetKey }, text, variant,
-      signature: `notOnStreet:${streetKey}:${variant}`,
-      visual: { kind: 'street', streetKeys: [streetKey] },
-    }));
-  }
-
-  const add=(type,text,params={},visual=null)=>options.push({type,speakerId,params,text,visual,signature:`${type}:${JSON.stringify(params)}:${text}`});
-  for(const [type,[family,predicate,texts]] of Object.entries(PROPERTY_CLUES)) for(const text of texts) add(type,text,type.startsWith('FRONTAGE_COUNT')?{count:1}:{});
+  const speaker=getHouseById(level,speakerId), options=[];
+  const add=(type,params={},visual=null,variant=0)=>{
+    const clue={type,speakerId,params,visual,variant};
+    clue.signature=clueWordingKey(clue);
+    options.push(clue);
+  };
+  for(const direction of ['north','south','east','west'])
+    clueTranslations.es.direction.forEach((_,variant)=>add('direction',{direction},{kind:'direction',direction},variant));
+  for(const max of [1,2,3,4])
+    clueTranslations.es.withinDistance.forEach((_,variant)=>add('withinDistance',{max},{kind:'radius',max},variant));
+  for(const min of [1,2,3])
+    clueTranslations.es.fartherThan.forEach((_,variant)=>add('fartherThan',{min},{kind:'radius',min},variant));
+  for(const streetKey of speaker.adjacentStreetKeys)
+    for(const type of ['onStreet','notOnStreet'])
+      clueTranslations.es[type].forEach((_,variant)=>add(type,{streetKey},{kind:'street',streetKeys:[streetKey]},variant));
+  for(const type of Object.keys(PROPERTY_CLUES))
+    clueTranslations.es[type].forEach((_,variant)=>add(type,type.startsWith('FRONTAGE_COUNT')?{count:1}:{},null,variant));
   for(const key of speaker.adjacentStreetKeys) {
     const visual={kind:'street',streetKeys:[key]};
-    add('FACES_PARALLEL_STREET','Su casa da a otra calle paralela a esta.',{streetKey:key},visual);
-    add('FACES_PERPENDICULAR_STREET','Su casa da a una calle perpendicular a esta.',{streetKey:key},visual);
+    add('FACES_PARALLEL_STREET',{streetKey:key},visual);
+    add('FACES_PERPENDICULAR_STREET',{streetKey:key},visual);
     if(separatingStreetKeys(level).includes(key)) {
-      add('SAME_SIDE_OF_STREET','Su casa está del mismo lado de esta calle que la mía.',{streetKey:key},visual);
-      add('OPPOSITE_SIDE_OF_STREET','Su casa está del otro lado de esta calle respecto de la mía.',{streetKey:key},visual);
+      add('SAME_SIDE_OF_STREET',{streetKey:key},visual);
+      add('OPPOSITE_SIDE_OF_STREET',{streetKey:key},visual);
     }
   }
   const keys=separatingStreetKeys(level);
   for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++) {
     if(keys[i][0]!==keys[j][0]) continue;
     const streetKeys=[keys[i],keys[j]].sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
-    add('BETWEEN_TWO_STREETS','Su casa está entre estas dos calles.',{streetKeys},{kind:'street',streetKeys});
+    add('BETWEEN_TWO_STREETS',{streetKeys},{kind:'street',streetKeys});
   }
-  // Access-based route predicates are registered and tested, but not emitted yet:
-  // the current UI does not show access nodes, so the route would be ambiguous.
+  // Routes stay disabled until the UI displays access nodes.
   if(level.levelNumber>=8) {
     const direction=options.filter(c=>c.type==='direction' && c.variant===0);
-    const simple=options.filter(c=>['AREA_GREATER_THAN_SPEAKER','HOUSE_VERTICAL','onStreet'].includes(c.type) && (!c.variant));
+    const simple=options.filter(c=>['AREA_GREATER_THAN_SPEAKER','HOUSE_VERTICAL','onStreet'].includes(c.type) && !c.variant);
     for(const a of direction) for(const b of simple) for(const type of ['AND','OR']) {
       const av=level.map.houses.map(h=>evaluateClue(level,a,h.id));
       const bv=level.map.houses.map(h=>evaluateClue(level,b,h.id));
       const combined=av.map((v,i)=>type==='AND'?v&&bv[i]:v||bv[i]);
       if(combined.every((v,i)=>v===av[i]) || combined.every((v,i)=>v===bv[i])) continue;
-      const text=`${a.text.slice(0,-1)} ${type==='AND'?'y':'o'} ${b.text[0].toLowerCase()+b.text.slice(1)}`;
-      add(type,text,{parts:[a,b]},b.visual);
+      add(type,{parts:[a,b]},b.visual);
     }
   }
   return options;
@@ -685,7 +793,6 @@ function cloneClue(clue) {
     type: clue.type,
     speakerId: clue.speakerId,
     params: JSON.parse(JSON.stringify(clue.params)),
-    text: clue.text,
     variant: clue.variant ?? 0,
     signature: clue.signature,
     visual: clue.visual ? JSON.parse(JSON.stringify(clue.visual)) : null,
@@ -864,7 +971,7 @@ function chooseClues(level, rng) {
     const eligible = [];
     for (const option of options) {
       const logicKey = `${option.clue.type}|${JSON.stringify(option.clue.params)}`;
-      if (usedTexts.has(option.clue.text)) continue;
+      if (usedTexts.has(clueWordingKey(option.clue))) continue;
       const family = clueFamily(option.clue);
       if (familyCounts[family] >= maxCluesForFamily(level, family)) continue;
 
@@ -891,7 +998,7 @@ function chooseClues(level, rng) {
     const picked = weightedPick(rng, eligible);
     house.clue = cloneClue(picked.clue);
     familyCounts[picked.family] += 1;
-    usedTexts.add(picked.clue.text);
+    usedTexts.add(clueWordingKey(picked.clue));
     usedLogic.add(`${picked.clue.type}|${JSON.stringify(picked.clue.params)}`);
   }
   level.clueFamilyCounts = { ...familyCounts };
@@ -949,7 +1056,7 @@ function validateLevel(level) {
     if (singleton.length === level.map.houses.length) return { valid: false, reason: 'empty_clue' };
     if (singleton.length < CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE) return { valid: false, reason: 'single_clue_unique' };
   }
-  const texts = level.map.houses.map((h) => h.clue.text);
+  const texts = level.map.houses.map((h) => clueWordingKey(h.clue));
   if (new Set(texts).size !== texts.length) return { valid: false, reason: 'duplicate_text' };
   const distanceClues = level.map.houses.filter((h) => clueFamily(h.clue) === 'distance').length;
   if (distanceClues > maxCluesForFamily(level, 'distance')) return { valid: false, reason: 'distance_overrepresented' };
@@ -1070,7 +1177,7 @@ class Game {
     this.lastOutcomeWon = false;
     this.ui.hideEnd();
     this.ui.renderMap(this.level);
-    this.ui.setPrompt(`Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+    this.ui.setPrompt(this.mode === 'assist' ? 'investigation.assist' : 'investigation.entry');
     this.ui.refresh();
   }
 
@@ -1078,8 +1185,7 @@ class Game {
     this.mode = mode;
     this.ui.hideStartModal();
     this.ui.setPrompt(mode === 'assist'
-      ? `Nivel ${this.levelNumber}. Seleccioná una casa. Las hipótesis imposibles se apagarán con cada testimonio.`
-      : `Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+      ? 'investigation.assist' : 'investigation.entry');
     this.ui.refresh();
   }
 
@@ -1089,10 +1195,10 @@ class Game {
     this.selectedHouseId = id;
     const h = this.selectedHouse;
     if (h.asked) {
-      this.ui.setPrompt('Este vecino ya habló.', h.clue.text);
+      this.ui.setPrompt('investigation.asked', h.clue);
       this.ui.highlightClue(h.clue);
-    } else if (this.level.timed && this.currentHour >= h.availableUntil) this.ui.setPrompt('Esta casa ya no responde.');
-    else this.ui.setPrompt('Elegí qué hacer con esta casa.');
+    } else if (this.level.timed && this.currentHour >= h.availableUntil) this.ui.setPrompt(phaseForHour(this.currentHour, CONFIG)==='night' ? 'investigation.unavailableNight' : 'investigation.unavailable');
+    else this.ui.setPrompt('investigation.select');
     this.ui.refresh();
   }
 
@@ -1105,7 +1211,7 @@ class Game {
     this.observations.push({ houseId: h.id, clue: h.clue });
     this.score -= CONFIG.INTERROGATION_COST;
     this.audio.interrogate();
-    this.ui.setPrompt('El vecino responde:', h.clue.text);
+    this.ui.setPrompt(pickDecorativeKey('interrogationOpeners'), h.clue);
     this.ui.highlightClue(h.clue);
     if (this.level.timed) this.currentHour += 1;
     const afterPhase = phaseForHour(this.currentHour, CONFIG);
@@ -1150,7 +1256,7 @@ class Game {
       this.revealedMurderer = true;
       this.lastOutcomeWon = true;
       this.audio.solve();
-      this.ui.setPrompt('La lógica cerró. El asesino quedó identificado.');
+      this.ui.setPrompt('');
       this.ui.refresh();
       await this.ui.playResolution();
       setTimeout(() => this.ui.showEnd({ won: true, score: this.score, questions: this.observations.length, lives: this.lives }), 280);
@@ -1166,11 +1272,11 @@ class Game {
       this.finished = true;
       this.revealedMurderer = true;
       this.lastOutcomeWon = false;
-      this.ui.setPrompt('Se acabaron las vidas. El barrio revela la casa correcta.');
+      this.ui.setPrompt('defeat.reveal');
       this.ui.refresh();
       setTimeout(() => this.ui.showEnd({ won: false, score: this.score, questions: this.observations.length, lives: 0 }), 450);
     } else {
-      this.ui.setPrompt('No era esa casa. Quedó descartada.');
+      this.ui.setPrompt(pickDecorativeKey('accusation.wrong'));
       this.ui.refresh();
     }
   }
@@ -1179,13 +1285,14 @@ class Game {
     if (this.hintUsed || this.finished) return;
     const hint = bestHintHouse(this.level, this.observations, this.level.timed ? this.currentHour : null);
     if (!hint) {
-      this.ui.setPrompt('No queda ninguna casa disponible para sugerir.');
+      const closed=this.level.timed && this.level.map.houses.some(h=>!h.asked) && this.level.map.houses.filter(h=>!h.asked).every(h=>this.currentHour>=h.availableUntil);
+      this.ui.setPrompt(closed ? 'help.closed' : 'help.empty');
       return;
     }
     this.hintUsed = true;
     this.score -= CONFIG.HINT_COST;
     this.selectedHouseId = hint.houseId;
-    this.ui.setPrompt('Quizás convenga hablar con este vecino.');
+    this.ui.setPrompt('help.suggest');
     this.ui.pulseHint(hint.houseId);
     this.ui.refresh();
   }
@@ -1235,7 +1342,6 @@ class Game {
     this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
     this.mode = mode;
     this.ui.hideStartModal();
-    this.ui.setPrompt(`Nivel ${nextLevelNumber}. El barrio es un poco más exigente.`);
     this.ui.refresh();
   }
 
@@ -1245,22 +1351,12 @@ class Game {
   }
 
   runBatchDebug() {
-    this.ui.el.debugBatchOutput.textContent = 'Validando…';
+    this.ui.el.debugBatchOutput.textContent = t('debug.validating');
     setTimeout(() => {
       const tests = runInternalTests();
       const result = batchValidate(100, { timed: false, prefix: `debug-${this.seed}`, levelNumber: this.levelNumber });
-      const failedTests = tests.results.filter((t) => !t.ok);
-      this.ui.el.debugBatchOutput.textContent = [
-        `self-tests: ${tests.passed}/${tests.total} passed`,
-        ...failedTests.map((t) => `FAIL ${t.name}${t.error ? `: ${t.error}` : ''}`),
-        '',
-        `level: ${this.levelNumber}`,
-        `${result.generated} generated`,
-        `${result.valid} valid`,
-        `${result.invalid} invalid`,
-        result.failures.length ? `failed seeds: ${result.failures.join(', ')}` : '0 ambiguous / impossible',
-        Object.keys(result.reasons).length ? `reasons: ${JSON.stringify(result.reasons)}` : '',
-      ].filter((x) => x !== '').join('\n');
+      this.ui.batchResult={tests,result};
+      this.ui.renderBatch();
     }, 20);
   }
 
@@ -1270,7 +1366,7 @@ class Game {
     this.loadLevel(seed, { timed: true, levelNumber: Math.max(1, this.levelNumber) });
     this.mode = 'assist';
     this.ui.hideStartModal();
-    this.ui.setPrompt('Demo temporal: cada interrogatorio consume una hora.');
+    this.ui.setPrompt('investigation.timed');
     this.ui.refresh();
   }
 }
@@ -1364,6 +1460,9 @@ class UI {
   }
 
   bind() {
+    applyCopy(document);
+    document.documentElement.lang=getLanguage();
+    document.querySelectorAll('[data-language]').forEach(btn=>btn.addEventListener('click',()=>this.changeLanguage(btn.dataset.language)));
     document.querySelectorAll('.mode-option').forEach((btn) => btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-option').forEach((b) => b.classList.toggle('is-selected', b === btn));
       this.game.pendingMode = btn.dataset.mode;
@@ -1440,7 +1539,7 @@ class UI {
 
     const housesGroup = svgEl('g', { id: 'housesGroup' });
     for (const h of level.map.houses) {
-      const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': 'Casa' });
+      const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': t('aria.house') });
       const r = svgEl('rect', { class: 'house-shape', x: h.rect.x, y: h.rect.y, width: h.rect.width, height: h.rect.height, rx: 0 });
       g.appendChild(r);
 
@@ -1472,28 +1571,29 @@ class UI {
 
   refresh() {
     const g = this.game;
-    this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString('es-AR');
+    this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
     this.el.livesValue.textContent = Array.from({ length: CONFIG.STARTING_LIVES }, (_, i) => i < g.lives ? '●' : '○').join(' ');
     this.el.levelValue.textContent = String(g.levelNumber);
-    this.el.seedLabel.textContent = g.level ? `seed ${g.level.seed}` : '';
-    this.el.modeBadge.textContent = g.mode === 'assist' ? 'ASISTENCIA' : 'LÓGICA PURA';
+    this.el.seedLabel.textContent = '';
+    this.el.seedLabel.hidden = true;
+    this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
     this.el.soundToggle.setAttribute('aria-pressed', String(g.audio.enabled));
     this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
-    if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = `NIVEL ${g.levelNumber} · UN ASESINO. UN MENTIROSO.`;
+    if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed) {
       this.el.timeStatus.classList.add('is-timed');
-      this.el.timeStatus.setAttribute('aria-label', 'Hora de la investigación');
+      this.el.timeStatus.setAttribute('aria-label', t('aria.time'));
       this.el.timeStatus.disabled = true;
-      this.el.timeStatus.querySelector('.status-kicker').textContent = 'HORA';
+      this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.hour');
       this.el.timeValue.textContent = `${String(g.currentHour).padStart(2, '0')}:00`;
       this.el.app.dataset.phase = phaseForHour(g.currentHour, CONFIG);
     } else {
       this.el.timeStatus.classList.remove('is-timed');
       this.el.timeStatus.disabled = false;
-      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? 'Cambiar a modo claro' : 'Cambiar a modo nocturno');
-      this.el.timeStatus.querySelector('.status-kicker').textContent = 'AMBIENTE';
-      this.el.timeValue.textContent = g.theme === 'night' ? '☾ NOCHE' : '☼ CLARO';
+      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? t('aria.light') : t('aria.night'));
+      this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
+      this.el.timeValue.textContent = g.theme === 'night' ? t('labels.night') : t('labels.light');
       this.el.app.dataset.phase = g.theme;
     }
 
@@ -1505,6 +1605,7 @@ class UI {
     for (const house of g.level?.map.houses || []) {
       const el = this.getHouseEl(house.id);
       if (!el) continue;
+      el.setAttribute('aria-label',t('aria.house'));
       el.classList.toggle('asked', house.asked && !house.mark);
       el.classList.toggle('was-asked', house.asked);
       el.classList.toggle('suspect', house.mark === 'suspect');
@@ -1522,27 +1623,40 @@ class UI {
     const selected = g.selectedHouse;
     const has = Boolean(selected);
     const unavailable = has && g.level.timed && g.currentHour >= selected.availableUntil && !selected.asked;
-    this.el.selectedState.textContent = !has ? 'NINGUNA' : unavailable ? 'NO DISPONIBLE' : selected.asked ? 'INTERROGADA' : selected.mark === 'suspect' ? 'SOSPECHOSA' : selected.mark === 'cleared' ? 'DESCARTADA' : 'SELECCIONADA';
+    this.el.selectedState.textContent = !has ? t('labels.none') : unavailable ? t('labels.unavailable') : selected.asked ? t('labels.asked') : selected.mark === 'suspect' ? t('labels.suspect') : selected.mark === 'cleared' ? t('labels.cleared') : t('labels.chosen');
     this.el.interrogateBtn.disabled = !has || selected.asked || unavailable || g.finished;
     this.el.suspectBtn.disabled = !has || g.finished || selected.confirmedInnocent;
     this.el.clearBtn.disabled = !has || g.finished;
     this.el.accuseBtn.disabled = !has || g.finished || selected.confirmedInnocent;
-    this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? 'Quitar sospecha' : 'Marcar sospechoso';
-    this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? 'Quitar descarte' : 'Descartar';
+    this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? uiText.actions.unmark : uiText.actions.suspect;
+    this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? uiText.actions.unclear : uiText.actions.clear;
     this.el.hintBtn.disabled = g.hintUsed || g.finished;
 
     this.updateDebug();
   }
 
-  setPrompt(text, testimony = null) {
-    this.el.casePrompt.textContent = text;
-    if (testimony) {
-      this.el.testimony.hidden = false;
-      this.el.testimony.textContent = `“${testimony}”`;
-    } else {
-      this.el.testimony.hidden = true;
-      this.el.testimony.textContent = '';
-    }
+  setPrompt(key, clue = null) {
+    this.promptKey=key;
+    this.promptClue=clue;
+    this.renderPrompt();
+  }
+
+  renderPrompt() {
+    this.el.casePrompt.textContent=this.promptKey?t(this.promptKey):'';
+    this.el.testimony.hidden=!this.promptClue;
+    this.el.testimony.textContent=this.promptClue?'“'+renderClue(this.promptClue)+'”':'';
+  }
+
+  renderBatch() {
+    if (!this.batchResult) return;
+    const {tests,result}=this.batchResult;
+    this.el.debugBatchOutput.textContent=[
+      t('debug.tests')+': '+tests.passed+'/'+tests.total,
+      ...tests.results.filter(x=>!x.ok).map(x=>'FAIL '+x.name),
+      result.generated+' '+t('debug.generated'),result.valid+' '+t('debug.valid'),result.invalid+' '+t('debug.invalid'),
+      t('debug.failed')+': '+(result.failures.join(', ')||t('debug.none')),
+      t('debug.reasons')+': '+JSON.stringify(result.reasons),
+    ].join('\n');
   }
 
   highlightClue(clue) {
@@ -1606,14 +1720,17 @@ class UI {
   showAccuseModal(show) { this.el.accuseModal.hidden = !show; this.syncModalLock(); }
 
   showEnd({ won, score, questions, lives }) {
+    this.endResult={won,score,questions,lives};
     this.el.endModal.hidden = false;
     this.syncModalLock();
-    this.el.endEyebrow.textContent = won ? `NIVEL ${this.game.levelNumber} RESUELTO` : `NIVEL ${this.game.levelNumber} · CASO CERRADO`;
-    this.el.endTitle.textContent = won ? 'Encontraste al asesino.' : 'Se acabaron las vidas.';
-    this.el.endScore.textContent = Math.max(0, score).toLocaleString('es-AR');
-    this.el.endQuestions.textContent = String(questions);
-    this.el.endLives.textContent = String(lives);
-    this.el.newGameBtn.textContent = won ? `Siguiente nivel · ${this.game.levelNumber + 1}` : 'Nuevo barrio';
+    this.el.endEyebrow.hidden = true;
+    this.el.endTitle.textContent = won ? uiText.victory.title : uiText.defeat.title;
+    document.getElementById('endMessage').textContent = won ? uiText.victory.text : uiText.defeat.text;
+    document.getElementById('endReveal').hidden = won;
+    this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
+    this.el.endQuestions.textContent = formatCount(questions,'question');
+    this.el.endLives.textContent = formatCount(lives,'life');
+    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
@@ -1648,53 +1765,37 @@ class UI {
   }
 
   updateDebug() {
-    if (!this.game.level || !this.el.debugOutput) return;
-    const level = this.game.level;
-    const metrics = level.metrics;
-    const candidates = getConsistentCandidates(level, this.game.observations);
-    const minSets = metrics.minimumSolvingHouseSets || [];
-    const minSetPreview = minSets.slice(0, 6).map((set, i) => `  ${i + 1}. ${set.join(' + ')}`).join('\n');
-    const singleRulePass = metrics.singleClueUniqueCount === 0;
-    const perHouse = level.map.houses.map((h) => {
-      const standalone = metrics.standaloneCandidatesByHouse?.[h.id] || [];
-      const truth = h.id === level.murdererId ? 'MENTIRA' : 'VERDAD';
-      const asked = h.asked ? ' · interrogada' : '';
-      const inMinimum=minSets.some(set=>set.includes(h.id));
-      const actual=evaluateClue(level,h.clue,level.murdererId);
-      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  ${h.clue.type} · familia ${clueFamily(h.clue)}\n  predicado ${h.clue.type}(${JSON.stringify(h.clue.params)})\n  ${actual?'TRUE':'FALSE'} · ${truth} · en conjunto mínimo: ${inMinimum?'sí':'no'}\n  casa ${h.widthInCells}×${h.heightInCells} · área ${h.area} · frentes ${h.frontageCount}\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · información ${Math.log2(metrics.houseCount/standalone.length).toFixed(2)} bits`;
-    });
-    const lines = [
-      `SEED  ${level.seed}`,
-      `NIVEL ${level.levelNumber} · ${metrics.houseCount} casas`,
-      '',
-      `ASESINO REAL  ${level.murdererId}`,
-      `PREGUNTAS MÍNIMAS  ${metrics.minimumQuestions}`,
-      `CONJUNTOS MÍNIMOS POSIBLES  ${metrics.minimumSolvingSets}`,
-      `REGLA “1 PISTA NO RESUELVE”  ${singleRulePass ? 'OK' : 'ERROR'}${singleRulePass ? '' : ` (${metrics.singleClueUniqueCount} pista/s inequívoca/s)`}`,
-      `REDUCCIÓN MEDIA POR 1 PISTA  ${metrics.averageCandidateReduction}`,
-      `REDUNDANCIA  ${metrics.redundancyScore}`,
-      `DISTRIBUCIÓN DE FAMILIAS\n${Object.entries(metrics.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>`  ${CLUE_FAMILY_LABELS[f]||f}: ${n}`).join('\n')}`,
-      `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
-      `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
-      `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
-      `TAMAÑOS\n${Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>`  ${a} lote(s): ${n}`).join('\n')}`,
-      `PROPIEDADES GEOMÉTRICAS\n${Object.entries(geometricPropertyCounts(level.map.houses)).map(([label,n])=>`  ${label}: ${n}${n===1?' · ÚNICA':''}`).join('\n')}`,
-      `PROPIEDADES ÚNICAS: ${Object.entries(geometricPropertyCounts(level.map.houses)).filter(([,n])=>n===1).map(([label])=>label).join(', ') || 'ninguna'}`,
-      `ALERTAS VISUALES: ${level.map.houses.flatMap(h=>visualClueWarnings(level,h.clue).map(w=>`${h.id}: ${w}`)).join('; ') || 'ninguna — pistas de tamaño/forma conservadoras'}`,
-      `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
-      `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
-      '',
-      `ESTADO ACTUAL`,
-      `interrogatorios: ${this.game.observations.length}`,
-      `candidatos compatibles: ${candidates.length}/${metrics.houseCount} · ${candidates.join(', ') || 'ninguno'}`,
-      '',
-      `EJEMPLOS DE CONJUNTOS MÍNIMOS${minSets.length > 6 ? ` (mostrando 6 de ${minSets.length})` : ''}`,
-      minSetPreview || '  ninguno',
-      '',
-      `INFORMACIÓN POR CASA`,
-      ...perHouse,
+    if(!this.game.level || !this.el.debugOutput) return;
+    const level=this.game.level,m=level.metrics,sets=m.minimumSolvingHouseSets||[];
+    const candidates=getConsistentCandidates(level,this.game.observations);
+    const d=key=>t('debug.'+key), line=(key,value)=>d(key)+'  '+value;
+    const propertyKeys=['horizontal','vertical','square','elongated','multiple','area1','area2','area3','area4'];
+    const properties=Object.values(geometricPropertyCounts(level.map.houses)).map((count,i)=>({label:t('properties.'+propertyKeys[i]),count}));
+    const lines=[
+      line('seed',level.seed),line('level',level.levelNumber)+' · '+m.houseCount+' '+d('houses'),'',
+      line('murderer',level.murdererId),line('minimum',m.minimumQuestions),line('sets',m.minimumSolvingSets),
+      line('single',m.singleClueUniqueCount===0?'OK':'ERROR'),line('reduction',m.averageCandidateReduction),line('redundancy',m.redundancyScore),
+      d('families'),...Object.entries(m.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>'  '+t('families.'+f)+': '+n),
+      line('minFamilies',(m.minimumSolutionFamilyRange||[]).join('–')),line('compound',m.compoundClueCount||0),line('complexity',m.averagePredicateComplexity?.toFixed(2)),
+      line('areas',(m.houseAreas||[]).join(', ')),d('sizes'),...Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>'  '+t('properties.area'+a)+': '+n),
+      d('properties'),...properties.map(p=>'  '+p.label+': '+p.count+(p.count===1?' · '+d('unique'):'')),
+      line('uniqueProperties',properties.filter(p=>p.count===1).map(p=>p.label).join(', ')||d('none')),
+      line('warnings',level.map.houses.filter(h=>visualClueWarnings(level,h.clue).length).map(h=>h.id+': '+h.clue.type).join(', ')||d('none')),
+      line('breaks',level.map.removedStreetSegments||0),line('grid',level.map.cols+'×'+level.map.rows)+' · '+d('missing')+' '+(level.map.missingBlocks||0),
+      '',d('current'),line('questions',this.game.observations.length),line('candidates',candidates.length+'/'+m.houseCount+' · '+(candidates.join(', ')||d('none'))),
+      '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];
-    this.el.debugOutput.textContent = lines.join('\n');
+    for(const h of level.map.houses) {
+      const alone=m.standaloneCandidatesByHouse?.[h.id]||[];
+      lines.push(h.id+(h.id===level.murdererId?' ★ '+d('murderer'):'')+(h.asked?' · '+d('asked'):''),
+        '  “'+renderClue(h.clue)+'”',
+        '  '+h.clue.type+' · '+d('family')+' '+t('families.'+clueFamily(h.clue)),
+        '  '+d('predicate')+' '+h.clue.type+'('+JSON.stringify(h.clue.params)+')',
+        '  '+evaluateClue(level,h.clue,level.murdererId)+' · '+d(h.id===level.murdererId?'lie':'truth')+' · '+d('inMinimum')+': '+d(sets.some(s=>s.includes(h.id))?'yes':'no'),
+        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount,
+        '  '+d('alone')+' '+alone.length+'/'+m.houseCount+' '+d('candidates')+': '+alone.join(', ')+' · '+d('reduces')+' '+m.informationByHouse[h.id]+' · '+d('information')+' '+Math.log2(m.houseCount/alone.length).toFixed(2)+' bits');
+    }
+    this.el.debugOutput.textContent=lines.join('\n');
   }
 }
 
@@ -1807,13 +1908,14 @@ const debug = params.get('debug') === '1';
 const levelNumber = Math.max(1, parseInt(params.get('level') || '1', 10) || 1);
 
 document.title = CONFIG.GAME_NAME;
+document.documentElement.lang=getLanguage();
 document.getElementById('brand').textContent = CONFIG.GAME_NAME.toUpperCase();
 
 try {
   window.vecindario = new Game({ seed, timed, debug, levelNumber });
 } catch (error) {
   console.error(error);
-  document.body.innerHTML = `<main style="font:16px system-ui;padding:32px;max-width:760px"><h1>No se pudo iniciar Vecindario</h1><p>${error.message}</p><p>Probá recargar con otra seed.</p></main>`;
+  document.body.innerHTML = `<main style="font:16px system-ui;padding:32px;max-width:760px"><h1>${t('error.title')}</h1><p>${t('error.retry')}</p></main>`;
 }
 
 })();

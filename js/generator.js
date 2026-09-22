@@ -2,6 +2,7 @@ import { CONFIG } from './config.js';
 import { createRng } from './rng.js';
 import { generateMap, validateStreetTopology, validHouseSizeDistribution, houseSizeCounts } from './map.js';
 import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
+import { clueWordingKey } from './clues.js';
 import { enumerateClueOptions, evaluateClue, cloneClue, clueFamily, validateClueReference } from './clues.js';
 import { getConsistentCandidates, isUniqueSolution, findMinimumSolvingSubsets, calculateDifficulty } from './solver.js';
 
@@ -66,7 +67,7 @@ function chooseClues(level, rng) {
     const eligible = [];
     for (const option of options) {
       const logicKey = `${option.clue.type}|${JSON.stringify(option.clue.params)}`;
-      if (usedTexts.has(option.clue.text)) continue;
+      if (usedTexts.has(clueWordingKey(option.clue))) continue;
       const family = clueFamily(option.clue);
       if (familyCounts[family] >= maxCluesForFamily(level, family)) continue;
 
@@ -93,7 +94,7 @@ function chooseClues(level, rng) {
     const picked = weightedPick(rng, eligible);
     house.clue = cloneClue(picked.clue);
     familyCounts[picked.family] += 1;
-    usedTexts.add(picked.clue.text);
+    usedTexts.add(clueWordingKey(picked.clue));
     usedLogic.add(`${picked.clue.type}|${JSON.stringify(picked.clue.params)}`);
   }
   level.clueFamilyCounts = { ...familyCounts };
@@ -151,7 +152,7 @@ function validateLevel(level) {
     if (singleton.length === level.map.houses.length) return { valid: false, reason: 'empty_clue' };
     if (singleton.length < CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE) return { valid: false, reason: 'single_clue_unique' };
   }
-  const texts = level.map.houses.map((h) => h.clue.text);
+  const texts = level.map.houses.map((h) => clueWordingKey(h.clue));
   if (new Set(texts).size !== texts.length) return { valid: false, reason: 'duplicate_text' };
   const distanceClues = level.map.houses.filter((h) => clueFamily(h.clue) === 'distance').length;
   if (distanceClues > maxCluesForFamily(level, 'distance')) return { valid: false, reason: 'distance_overrepresented' };

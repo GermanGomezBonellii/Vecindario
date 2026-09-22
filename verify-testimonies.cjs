@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const code=['config','rng','map','clues','solver','generator'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const code=['config','copy','clue-copy','rng','map','clues','solver','generator'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const api=vm.runInNewContext(code+'\n({generateLevel,validateGeneratedLevel,validateStreetTopology,validateClueReference,enumerateClueOptions,evaluateClue,clueFamily,getConsistentCandidates,findMinimumSolvingSubsets,reachableWithoutTurning,buildGraph,HOUSE_SHAPES})');
 let assertions=0;
 function eq(a,b){assert.equal(a,b);assertions++;}

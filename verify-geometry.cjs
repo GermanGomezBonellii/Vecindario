@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const source = ['config','rng','map','clues','solver','generator','tests'].map(name => fs.readFileSync(path.join(__dirname,'js',name+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const source = ['config','copy','clue-copy','rng','map','clues','solver','generator','tests'].map(name => fs.readFileSync(path.join(__dirname,'js',name+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const api = vm.runInNewContext(source + '\n({generateLevel, validateGeneratedLevel, runInternalTests, evaluateClue})');
 const internal = api.runInternalTests();
 console.log(JSON.stringify(internal));

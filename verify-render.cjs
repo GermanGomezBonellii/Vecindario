@@ -8,7 +8,7 @@ class Element {
   appendChild(el) { this.children.push(el); return el; }
   addEventListener() {}
 }
-const source=['config','rng','map','clues','solver','generator','ui'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const source=['config','copy','clue-copy','rng','map','clues','solver','generator','ui'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const api=vm.runInNewContext(source+'\n({UI,generateLevel,validateGeneratedLevel})',{document:{createElementNS:(_,tag)=>new Element(tag)}});
 for (const levelNumber of [1,5,12,20]) {
   for (let i=0;i<3;i++) {

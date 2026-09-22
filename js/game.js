@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { t, pickDecorativeKey } from './copy.js';
 import { generateLevel, batchValidate } from './generator.js';
 import { bestHintHouse } from './solver.js';
 import { randomSeed } from './rng.js';
@@ -55,7 +56,7 @@ export class Game {
     this.lastOutcomeWon = false;
     this.ui.hideEnd();
     this.ui.renderMap(this.level);
-    this.ui.setPrompt(`Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+    this.ui.setPrompt(this.mode === 'assist' ? 'investigation.assist' : 'investigation.entry');
     this.ui.refresh();
   }
 
@@ -63,8 +64,7 @@ export class Game {
     this.mode = mode;
     this.ui.hideStartModal();
     this.ui.setPrompt(mode === 'assist'
-      ? `Nivel ${this.levelNumber}. Seleccioná una casa. Las hipótesis imposibles se apagarán con cada testimonio.`
-      : `Nivel ${this.levelNumber}. Seleccioná una casa para investigar.`);
+      ? 'investigation.assist' : 'investigation.entry');
     this.ui.refresh();
   }
 
@@ -74,10 +74,10 @@ export class Game {
     this.selectedHouseId = id;
     const h = this.selectedHouse;
     if (h.asked) {
-      this.ui.setPrompt('Este vecino ya habló.', h.clue.text);
+      this.ui.setPrompt('investigation.asked', h.clue);
       this.ui.highlightClue(h.clue);
-    } else if (this.level.timed && this.currentHour >= h.availableUntil) this.ui.setPrompt('Esta casa ya no responde.');
-    else this.ui.setPrompt('Elegí qué hacer con esta casa.');
+    } else if (this.level.timed && this.currentHour >= h.availableUntil) this.ui.setPrompt(phaseForHour(this.currentHour, CONFIG)==='night' ? 'investigation.unavailableNight' : 'investigation.unavailable');
+    else this.ui.setPrompt('investigation.select');
     this.ui.refresh();
   }
 
@@ -90,7 +90,7 @@ export class Game {
     this.observations.push({ houseId: h.id, clue: h.clue });
     this.score -= CONFIG.INTERROGATION_COST;
     this.audio.interrogate();
-    this.ui.setPrompt('El vecino responde:', h.clue.text);
+    this.ui.setPrompt(pickDecorativeKey('interrogationOpeners'), h.clue);
     this.ui.highlightClue(h.clue);
     if (this.level.timed) this.currentHour += 1;
     const afterPhase = phaseForHour(this.currentHour, CONFIG);
@@ -135,7 +135,7 @@ export class Game {
       this.revealedMurderer = true;
       this.lastOutcomeWon = true;
       this.audio.solve();
-      this.ui.setPrompt('La lógica cerró. El asesino quedó identificado.');
+      this.ui.setPrompt('');
       this.ui.refresh();
       await this.ui.playResolution();
       setTimeout(() => this.ui.showEnd({ won: true, score: this.score, questions: this.observations.length, lives: this.lives }), 280);
@@ -151,11 +151,11 @@ export class Game {
       this.finished = true;
       this.revealedMurderer = true;
       this.lastOutcomeWon = false;
-      this.ui.setPrompt('Se acabaron las vidas. El barrio revela la casa correcta.');
+      this.ui.setPrompt('defeat.reveal');
       this.ui.refresh();
       setTimeout(() => this.ui.showEnd({ won: false, score: this.score, questions: this.observations.length, lives: 0 }), 450);
     } else {
-      this.ui.setPrompt('No era esa casa. Quedó descartada.');
+      this.ui.setPrompt(pickDecorativeKey('accusation.wrong'));
       this.ui.refresh();
     }
   }
@@ -164,13 +164,14 @@ export class Game {
     if (this.hintUsed || this.finished) return;
     const hint = bestHintHouse(this.level, this.observations, this.level.timed ? this.currentHour : null);
     if (!hint) {
-      this.ui.setPrompt('No queda ninguna casa disponible para sugerir.');
+      const closed=this.level.timed && this.level.map.houses.some(h=>!h.asked) && this.level.map.houses.filter(h=>!h.asked).every(h=>this.currentHour>=h.availableUntil);
+      this.ui.setPrompt(closed ? 'help.closed' : 'help.empty');
       return;
     }
     this.hintUsed = true;
     this.score -= CONFIG.HINT_COST;
     this.selectedHouseId = hint.houseId;
-    this.ui.setPrompt('Quizás convenga hablar con este vecino.');
+    this.ui.setPrompt('help.suggest');
     this.ui.pulseHint(hint.houseId);
     this.ui.refresh();
   }
@@ -220,7 +221,6 @@ export class Game {
     this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
     this.mode = mode;
     this.ui.hideStartModal();
-    this.ui.setPrompt(`Nivel ${nextLevelNumber}. El barrio es un poco más exigente.`);
     this.ui.refresh();
   }
 
@@ -230,22 +230,12 @@ export class Game {
   }
 
   runBatchDebug() {
-    this.ui.el.debugBatchOutput.textContent = 'Validando…';
+    this.ui.el.debugBatchOutput.textContent = t('debug.validating');
     setTimeout(() => {
       const tests = runInternalTests();
       const result = batchValidate(100, { timed: false, prefix: `debug-${this.seed}`, levelNumber: this.levelNumber });
-      const failedTests = tests.results.filter((t) => !t.ok);
-      this.ui.el.debugBatchOutput.textContent = [
-        `self-tests: ${tests.passed}/${tests.total} passed`,
-        ...failedTests.map((t) => `FAIL ${t.name}${t.error ? `: ${t.error}` : ''}`),
-        '',
-        `level: ${this.levelNumber}`,
-        `${result.generated} generated`,
-        `${result.valid} valid`,
-        `${result.invalid} invalid`,
-        result.failures.length ? `failed seeds: ${result.failures.join(', ')}` : '0 ambiguous / impossible',
-        Object.keys(result.reasons).length ? `reasons: ${JSON.stringify(result.reasons)}` : '',
-      ].filter((x) => x !== '').join('\n');
+      this.ui.batchResult={tests,result};
+      this.ui.renderBatch();
     }, 20);
   }
 
@@ -255,7 +245,7 @@ export class Game {
     this.loadLevel(seed, { timed: true, levelNumber: Math.max(1, this.levelNumber) });
     this.mode = 'assist';
     this.ui.hideStartModal();
-    this.ui.setPrompt('Demo temporal: cada interrogatorio consume una hora.');
+    this.ui.setPrompt('investigation.timed');
     this.ui.refresh();
   }
 }

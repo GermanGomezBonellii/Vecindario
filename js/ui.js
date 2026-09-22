@@ -2,6 +2,8 @@ import { getStreetSegments, phaseForHour } from './map.js';
 import { evaluateClue, clueFamily, CLUE_FAMILY_LABELS } from './clues.js';
 import { getConsistentCandidates } from './solver.js';
 import { CONFIG } from './config.js';
+import { uiText, applyCopy, t, getLanguage, setLanguage, formatCount } from './copy.js';
+import { renderClue } from './clue-copy.js';
 import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { houseSizeCounts } from './map.js';
 
@@ -42,6 +44,9 @@ export class UI {
   }
 
   bind() {
+    applyCopy(document);
+    document.documentElement.lang=getLanguage();
+    document.querySelectorAll('[data-language]').forEach(btn=>btn.addEventListener('click',()=>this.changeLanguage(btn.dataset.language)));
     document.querySelectorAll('.mode-option').forEach((btn) => btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-option').forEach((b) => b.classList.toggle('is-selected', b === btn));
       this.game.pendingMode = btn.dataset.mode;
@@ -118,7 +123,7 @@ export class UI {
 
     const housesGroup = svgEl('g', { id: 'housesGroup' });
     for (const h of level.map.houses) {
-      const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': 'Casa' });
+      const g = svgEl('g', { class: 'house', 'data-house-id': h.id, tabindex: '0', role: 'button', 'aria-label': t('aria.house') });
       const r = svgEl('rect', { class: 'house-shape', x: h.rect.x, y: h.rect.y, width: h.rect.width, height: h.rect.height, rx: 0 });
       g.appendChild(r);
 
@@ -150,28 +155,29 @@ export class UI {
 
   refresh() {
     const g = this.game;
-    this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString('es-AR');
+    this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
     this.el.livesValue.textContent = Array.from({ length: CONFIG.STARTING_LIVES }, (_, i) => i < g.lives ? '●' : '○').join(' ');
     this.el.levelValue.textContent = String(g.levelNumber);
-    this.el.seedLabel.textContent = g.level ? `seed ${g.level.seed}` : '';
-    this.el.modeBadge.textContent = g.mode === 'assist' ? 'ASISTENCIA' : 'LÓGICA PURA';
+    this.el.seedLabel.textContent = '';
+    this.el.seedLabel.hidden = true;
+    this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
     this.el.soundToggle.setAttribute('aria-pressed', String(g.audio.enabled));
     this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
-    if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = `NIVEL ${g.levelNumber} · UN ASESINO. UN MENTIROSO.`;
+    if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed) {
       this.el.timeStatus.classList.add('is-timed');
-      this.el.timeStatus.setAttribute('aria-label', 'Hora de la investigación');
+      this.el.timeStatus.setAttribute('aria-label', t('aria.time'));
       this.el.timeStatus.disabled = true;
-      this.el.timeStatus.querySelector('.status-kicker').textContent = 'HORA';
+      this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.hour');
       this.el.timeValue.textContent = `${String(g.currentHour).padStart(2, '0')}:00`;
       this.el.app.dataset.phase = phaseForHour(g.currentHour, CONFIG);
     } else {
       this.el.timeStatus.classList.remove('is-timed');
       this.el.timeStatus.disabled = false;
-      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? 'Cambiar a modo claro' : 'Cambiar a modo nocturno');
-      this.el.timeStatus.querySelector('.status-kicker').textContent = 'AMBIENTE';
-      this.el.timeValue.textContent = g.theme === 'night' ? '☾ NOCHE' : '☼ CLARO';
+      this.el.timeStatus.setAttribute('aria-label', g.theme === 'night' ? t('aria.light') : t('aria.night'));
+      this.el.timeStatus.querySelector('.status-kicker').textContent = t('labels.environment');
+      this.el.timeValue.textContent = g.theme === 'night' ? t('labels.night') : t('labels.light');
       this.el.app.dataset.phase = g.theme;
     }
 
@@ -183,6 +189,7 @@ export class UI {
     for (const house of g.level?.map.houses || []) {
       const el = this.getHouseEl(house.id);
       if (!el) continue;
+      el.setAttribute('aria-label',t('aria.house'));
       el.classList.toggle('asked', house.asked && !house.mark);
       el.classList.toggle('was-asked', house.asked);
       el.classList.toggle('suspect', house.mark === 'suspect');
@@ -200,27 +207,40 @@ export class UI {
     const selected = g.selectedHouse;
     const has = Boolean(selected);
     const unavailable = has && g.level.timed && g.currentHour >= selected.availableUntil && !selected.asked;
-    this.el.selectedState.textContent = !has ? 'NINGUNA' : unavailable ? 'NO DISPONIBLE' : selected.asked ? 'INTERROGADA' : selected.mark === 'suspect' ? 'SOSPECHOSA' : selected.mark === 'cleared' ? 'DESCARTADA' : 'SELECCIONADA';
+    this.el.selectedState.textContent = !has ? t('labels.none') : unavailable ? t('labels.unavailable') : selected.asked ? t('labels.asked') : selected.mark === 'suspect' ? t('labels.suspect') : selected.mark === 'cleared' ? t('labels.cleared') : t('labels.chosen');
     this.el.interrogateBtn.disabled = !has || selected.asked || unavailable || g.finished;
     this.el.suspectBtn.disabled = !has || g.finished || selected.confirmedInnocent;
     this.el.clearBtn.disabled = !has || g.finished;
     this.el.accuseBtn.disabled = !has || g.finished || selected.confirmedInnocent;
-    this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? 'Quitar sospecha' : 'Marcar sospechoso';
-    this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? 'Quitar descarte' : 'Descartar';
+    this.el.suspectBtn.textContent = has && selected.mark === 'suspect' ? uiText.actions.unmark : uiText.actions.suspect;
+    this.el.clearBtn.textContent = has && selected.mark === 'cleared' ? uiText.actions.unclear : uiText.actions.clear;
     this.el.hintBtn.disabled = g.hintUsed || g.finished;
 
     this.updateDebug();
   }
 
-  setPrompt(text, testimony = null) {
-    this.el.casePrompt.textContent = text;
-    if (testimony) {
-      this.el.testimony.hidden = false;
-      this.el.testimony.textContent = `“${testimony}”`;
-    } else {
-      this.el.testimony.hidden = true;
-      this.el.testimony.textContent = '';
-    }
+  setPrompt(key, clue = null) {
+    this.promptKey=key;
+    this.promptClue=clue;
+    this.renderPrompt();
+  }
+
+  renderPrompt() {
+    this.el.casePrompt.textContent=this.promptKey?t(this.promptKey):'';
+    this.el.testimony.hidden=!this.promptClue;
+    this.el.testimony.textContent=this.promptClue?'“'+renderClue(this.promptClue)+'”':'';
+  }
+
+  renderBatch() {
+    if (!this.batchResult) return;
+    const {tests,result}=this.batchResult;
+    this.el.debugBatchOutput.textContent=[
+      t('debug.tests')+': '+tests.passed+'/'+tests.total,
+      ...tests.results.filter(x=>!x.ok).map(x=>'FAIL '+x.name),
+      result.generated+' '+t('debug.generated'),result.valid+' '+t('debug.valid'),result.invalid+' '+t('debug.invalid'),
+      t('debug.failed')+': '+(result.failures.join(', ')||t('debug.none')),
+      t('debug.reasons')+': '+JSON.stringify(result.reasons),
+    ].join('\n');
   }
 
   highlightClue(clue) {
@@ -284,14 +304,17 @@ export class UI {
   showAccuseModal(show) { this.el.accuseModal.hidden = !show; this.syncModalLock(); }
 
   showEnd({ won, score, questions, lives }) {
+    this.endResult={won,score,questions,lives};
     this.el.endModal.hidden = false;
     this.syncModalLock();
-    this.el.endEyebrow.textContent = won ? `NIVEL ${this.game.levelNumber} RESUELTO` : `NIVEL ${this.game.levelNumber} · CASO CERRADO`;
-    this.el.endTitle.textContent = won ? 'Encontraste al asesino.' : 'Se acabaron las vidas.';
-    this.el.endScore.textContent = Math.max(0, score).toLocaleString('es-AR');
-    this.el.endQuestions.textContent = String(questions);
-    this.el.endLives.textContent = String(lives);
-    this.el.newGameBtn.textContent = won ? `Siguiente nivel · ${this.game.levelNumber + 1}` : 'Nuevo barrio';
+    this.el.endEyebrow.hidden = true;
+    this.el.endTitle.textContent = won ? uiText.victory.title : uiText.defeat.title;
+    document.getElementById('endMessage').textContent = won ? uiText.victory.text : uiText.defeat.text;
+    document.getElementById('endReveal').hidden = won;
+    this.el.endScore.textContent = formatCount(Math.max(0, score),'point');
+    this.el.endQuestions.textContent = formatCount(questions,'question');
+    this.el.endLives.textContent = formatCount(lives,'life');
+    this.el.newGameBtn.textContent = won ? uiText.victory.next : uiText.defeat.next;
   }
 
   hideEnd() { this.el.endModal.hidden = true; this.syncModalLock(); }
@@ -326,52 +349,36 @@ export class UI {
   }
 
   updateDebug() {
-    if (!this.game.level || !this.el.debugOutput) return;
-    const level = this.game.level;
-    const metrics = level.metrics;
-    const candidates = getConsistentCandidates(level, this.game.observations);
-    const minSets = metrics.minimumSolvingHouseSets || [];
-    const minSetPreview = minSets.slice(0, 6).map((set, i) => `  ${i + 1}. ${set.join(' + ')}`).join('\n');
-    const singleRulePass = metrics.singleClueUniqueCount === 0;
-    const perHouse = level.map.houses.map((h) => {
-      const standalone = metrics.standaloneCandidatesByHouse?.[h.id] || [];
-      const truth = h.id === level.murdererId ? 'MENTIRA' : 'VERDAD';
-      const asked = h.asked ? ' · interrogada' : '';
-      const inMinimum=minSets.some(set=>set.includes(h.id));
-      const actual=evaluateClue(level,h.clue,level.murdererId);
-      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  ${h.clue.type} · familia ${clueFamily(h.clue)}\n  predicado ${h.clue.type}(${JSON.stringify(h.clue.params)})\n  ${actual?'TRUE':'FALSE'} · ${truth} · en conjunto mínimo: ${inMinimum?'sí':'no'}\n  casa ${h.widthInCells}×${h.heightInCells} · área ${h.area} · frentes ${h.frontageCount}\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · información ${Math.log2(metrics.houseCount/standalone.length).toFixed(2)} bits`;
-    });
-    const lines = [
-      `SEED  ${level.seed}`,
-      `NIVEL ${level.levelNumber} · ${metrics.houseCount} casas`,
-      '',
-      `ASESINO REAL  ${level.murdererId}`,
-      `PREGUNTAS MÍNIMAS  ${metrics.minimumQuestions}`,
-      `CONJUNTOS MÍNIMOS POSIBLES  ${metrics.minimumSolvingSets}`,
-      `REGLA “1 PISTA NO RESUELVE”  ${singleRulePass ? 'OK' : 'ERROR'}${singleRulePass ? '' : ` (${metrics.singleClueUniqueCount} pista/s inequívoca/s)`}`,
-      `REDUCCIÓN MEDIA POR 1 PISTA  ${metrics.averageCandidateReduction}`,
-      `REDUNDANCIA  ${metrics.redundancyScore}`,
-      `DISTRIBUCIÓN DE FAMILIAS\n${Object.entries(metrics.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>`  ${CLUE_FAMILY_LABELS[f]||f}: ${n}`).join('\n')}`,
-      `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
-      `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
-      `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
-      `TAMAÑOS\n${Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>`  ${a} lote(s): ${n}`).join('\n')}`,
-      `PROPIEDADES GEOMÉTRICAS\n${Object.entries(geometricPropertyCounts(level.map.houses)).map(([label,n])=>`  ${label}: ${n}${n===1?' · ÚNICA':''}`).join('\n')}`,
-      `PROPIEDADES ÚNICAS: ${Object.entries(geometricPropertyCounts(level.map.houses)).filter(([,n])=>n===1).map(([label])=>label).join(', ') || 'ninguna'}`,
-      `ALERTAS VISUALES: ${level.map.houses.flatMap(h=>visualClueWarnings(level,h.clue).map(w=>`${h.id}: ${w}`)).join('; ') || 'ninguna — pistas de tamaño/forma conservadoras'}`,
-      `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
-      `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
-      '',
-      `ESTADO ACTUAL`,
-      `interrogatorios: ${this.game.observations.length}`,
-      `candidatos compatibles: ${candidates.length}/${metrics.houseCount} · ${candidates.join(', ') || 'ninguno'}`,
-      '',
-      `EJEMPLOS DE CONJUNTOS MÍNIMOS${minSets.length > 6 ? ` (mostrando 6 de ${minSets.length})` : ''}`,
-      minSetPreview || '  ninguno',
-      '',
-      `INFORMACIÓN POR CASA`,
-      ...perHouse,
+    if(!this.game.level || !this.el.debugOutput) return;
+    const level=this.game.level,m=level.metrics,sets=m.minimumSolvingHouseSets||[];
+    const candidates=getConsistentCandidates(level,this.game.observations);
+    const d=key=>t('debug.'+key), line=(key,value)=>d(key)+'  '+value;
+    const propertyKeys=['horizontal','vertical','square','elongated','multiple','area1','area2','area3','area4'];
+    const properties=Object.values(geometricPropertyCounts(level.map.houses)).map((count,i)=>({label:t('properties.'+propertyKeys[i]),count}));
+    const lines=[
+      line('seed',level.seed),line('level',level.levelNumber)+' · '+m.houseCount+' '+d('houses'),'',
+      line('murderer',level.murdererId),line('minimum',m.minimumQuestions),line('sets',m.minimumSolvingSets),
+      line('single',m.singleClueUniqueCount===0?'OK':'ERROR'),line('reduction',m.averageCandidateReduction),line('redundancy',m.redundancyScore),
+      d('families'),...Object.entries(m.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>'  '+t('families.'+f)+': '+n),
+      line('minFamilies',(m.minimumSolutionFamilyRange||[]).join('–')),line('compound',m.compoundClueCount||0),line('complexity',m.averagePredicateComplexity?.toFixed(2)),
+      line('areas',(m.houseAreas||[]).join(', ')),d('sizes'),...Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>'  '+t('properties.area'+a)+': '+n),
+      d('properties'),...properties.map(p=>'  '+p.label+': '+p.count+(p.count===1?' · '+d('unique'):'')),
+      line('uniqueProperties',properties.filter(p=>p.count===1).map(p=>p.label).join(', ')||d('none')),
+      line('warnings',level.map.houses.filter(h=>visualClueWarnings(level,h.clue).length).map(h=>h.id+': '+h.clue.type).join(', ')||d('none')),
+      line('breaks',level.map.removedStreetSegments||0),line('grid',level.map.cols+'×'+level.map.rows)+' · '+d('missing')+' '+(level.map.missingBlocks||0),
+      '',d('current'),line('questions',this.game.observations.length),line('candidates',candidates.length+'/'+m.houseCount+' · '+(candidates.join(', ')||d('none'))),
+      '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];
-    this.el.debugOutput.textContent = lines.join('\n');
+    for(const h of level.map.houses) {
+      const alone=m.standaloneCandidatesByHouse?.[h.id]||[];
+      lines.push(h.id+(h.id===level.murdererId?' ★ '+d('murderer'):'')+(h.asked?' · '+d('asked'):''),
+        '  “'+renderClue(h.clue)+'”',
+        '  '+h.clue.type+' · '+d('family')+' '+t('families.'+clueFamily(h.clue)),
+        '  '+d('predicate')+' '+h.clue.type+'('+JSON.stringify(h.clue.params)+')',
+        '  '+evaluateClue(level,h.clue,level.murdererId)+' · '+d(h.id===level.murdererId?'lie':'truth')+' · '+d('inMinimum')+': '+d(sets.some(s=>s.includes(h.id))?'yes':'no'),
+        '  '+d('house')+' '+h.widthInCells+'×'+h.heightInCells+' · '+d('area')+' '+h.area+' · '+d('fronts')+' '+h.frontageCount,
+        '  '+d('alone')+' '+alone.length+'/'+m.houseCount+' '+d('candidates')+': '+alone.join(', ')+' · '+d('reduces')+' '+m.informationByHouse[h.id]+' · '+d('information')+' '+Math.log2(m.houseCount/alone.length).toFixed(2)+' bits');
+    }
+    this.el.debugOutput.textContent=lines.join('\n');
   }
 }

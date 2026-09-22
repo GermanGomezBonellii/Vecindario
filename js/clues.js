@@ -1,11 +1,7 @@
+import { clueTranslations, renderClue } from './clue-copy.js';
 import { graphDistance, candidateTouchesStreet, getHouseById, getStreetSegments } from './map.js';
 
-const DIRECTION_TEXT = {
-  north: ['Está al norte de mi casa.', 'Yo miraría al norte de mi casa.', 'Desde mi casa queda hacia el norte.'],
-  south: ['Está al sur de mi casa.', 'Yo miraría al sur de mi casa.', 'Desde mi casa queda hacia el sur.'],
-  east: ['Está al este de mi casa.', 'Yo miraría al este de mi casa.', 'Desde mi casa queda hacia el este.'],
-  west: ['Está al oeste de mi casa.', 'Yo miraría al oeste de mi casa.', 'Desde mi casa queda hacia el oeste.'],
-};
+const DIRECTION_TEXT = Object.fromEntries(['north','south','east','west'].map(direction=>[direction,clueTranslations.es.direction]));
 
 function evalDirection(level, speaker, candidate, direction) {
   const eps = 0.5;
@@ -49,21 +45,21 @@ export const CLUE_TYPES = {
 
 // Registry: text variants share one exact predicate; the solver never reads text.
 const PROPERTY_CLUES = {
-  AREA_GREATER_THAN_SPEAKER: ['size', (c,s)=>c.area>s.area, ['Su casa es más grande que la mía.', 'Tiene más terreno construido que yo.']],
-  AREA_SMALLER_THAN_SPEAKER: ['size', (c,s)=>c.area<s.area, ['Su casa es más chica que la mía.', 'Tiene menos terreno construido que yo.']],
-  AREA_EQUAL_TO_SPEAKER: ['size', (c,s)=>c.area===s.area, ['Su casa ocupa lo mismo que la mía.']],
-  HOUSE_HORIZONTAL: ['orientation', c=>c.isHorizontal, ['Su casa se extiende más de este a oeste.']],
-  HOUSE_VERTICAL: ['orientation', c=>c.isVertical, ['Su casa se extiende más de norte a sur.']],
-  HOUSE_SQUARE: ['orientation', c=>c.isSquare, ['Su casa tiene forma cuadrada.']],
-  HOUSE_ELONGATED: ['orientation', c=>c.isElongated, ['El lado largo de su casa mide al menos el doble que el corto.']],
-  FRONTAGE_COUNT_GREATER_THAN: ['frontage', (c,s,p)=>c.frontageCount>p.count, ['Su casa tiene más de un frente a la calle.']],
-  FRONTAGE_COUNT_EQUALS: ['frontage', (c,s,p)=>c.frontageCount===p.count, ['Su casa tiene un solo frente a la calle.']],
-  FACES_MORE_THAN_ONE_STREET: ['frontage', c=>c.adjacentStreetKeys.length>1, ['Su casa mira a más de una calle.']],
-  CORNER_HOUSE: ['frontage', c=>c.touchesCorner, ['Su casa da a dos calles que forman una esquina.']],
-  HAS_FREE_ADJACENT_SPACE: ['space', c=>c.freeAdjacentCells>0, ['Tiene algún lote libre pegado a su casa, dentro de su manzana.']],
-  HAS_MULTIPLE_FREE_SIDES: ['space', c=>c.freeSides>=2, ['Tiene lotes libres junto a por lo menos dos lados de su casa, en su manzana.']],
-  MORE_OPEN_SPACE_THAN_SPEAKER: ['space', (c,s)=>c.freeAdjacentCells>s.freeAdjacentCells, ['Dentro de su manzana, tiene más lotes libres pegados a la casa que yo.']],
-  SPANS_MULTIPLE_GRID_CELLS: ['size', c=>c.area>1, ['Su casa ocupa más de un cuadrado de la retícula.']],
+  AREA_GREATER_THAN_SPEAKER: ['size', (c,s)=>c.area>s.area, clueTranslations.es.AREA_GREATER_THAN_SPEAKER],
+  AREA_SMALLER_THAN_SPEAKER: ['size', (c,s)=>c.area<s.area, clueTranslations.es.AREA_SMALLER_THAN_SPEAKER],
+  AREA_EQUAL_TO_SPEAKER: ['size', (c,s)=>c.area===s.area, clueTranslations.es.AREA_EQUAL_TO_SPEAKER],
+  HOUSE_HORIZONTAL: ['orientation', c=>c.isHorizontal, clueTranslations.es.HOUSE_HORIZONTAL],
+  HOUSE_VERTICAL: ['orientation', c=>c.isVertical, clueTranslations.es.HOUSE_VERTICAL],
+  HOUSE_SQUARE: ['orientation', c=>c.isSquare, clueTranslations.es.HOUSE_SQUARE],
+  HOUSE_ELONGATED: ['orientation', c=>c.isElongated, clueTranslations.es.HOUSE_ELONGATED],
+  FRONTAGE_COUNT_GREATER_THAN: ['frontage', (c,s,p)=>c.frontageCount>p.count, clueTranslations.es.FRONTAGE_COUNT_GREATER_THAN],
+  FRONTAGE_COUNT_EQUALS: ['frontage', (c,s,p)=>c.frontageCount===p.count, clueTranslations.es.FRONTAGE_COUNT_EQUALS],
+  FACES_MORE_THAN_ONE_STREET: ['frontage', c=>c.adjacentStreetKeys.length>1, clueTranslations.es.FACES_MORE_THAN_ONE_STREET],
+  CORNER_HOUSE: ['frontage', c=>c.touchesCorner, clueTranslations.es.CORNER_HOUSE],
+  HAS_FREE_ADJACENT_SPACE: ['space', c=>c.freeAdjacentCells>0, clueTranslations.es.HAS_FREE_ADJACENT_SPACE],
+  HAS_MULTIPLE_FREE_SIDES: ['space', c=>c.freeSides>=2, clueTranslations.es.HAS_MULTIPLE_FREE_SIDES],
+  MORE_OPEN_SPACE_THAN_SPEAKER: ['space', (c,s)=>c.freeAdjacentCells>s.freeAdjacentCells, clueTranslations.es.MORE_OPEN_SPACE_THAN_SPEAKER],
+  SPANS_MULTIPLE_GRID_CELLS: ['size', c=>c.area>1, clueTranslations.es.SPANS_MULTIPLE_GRID_CELLS],
 };
 for (const [type, [family, predicate]] of Object.entries(PROPERTY_CLUES)) {
   CLUE_TYPES[type] = { family, evaluate:(level,clue,candidate)=>predicate(candidate,getHouseById(level,clue.speakerId),clue.params) };
@@ -166,97 +162,55 @@ export function evaluateClue(level, clue, candidateId) {
   return Boolean(type.evaluate(level, clue, candidate));
 }
 
+// Stable semantic wording key: no translated text participates in generation.
+export function clueWordingKey(clue) {
+  if (['AND','OR'].includes(clue.type)) return clue.type+':'+clue.params.parts.map(clueWordingKey).join('|');
+  return [clue.type,clue.variant??0,clue.params.direction??'',clue.params.max??clue.params.min??''].join(':');
+}
+
 export function enumerateClueOptions(level, speakerId) {
-  const speaker = getHouseById(level, speakerId);
-  const options = [];
-
-  for (const direction of ['north', 'south', 'east', 'west']) {
-    DIRECTION_TEXT[direction].forEach((text, variant) => {
-      options.push({
-        type: 'direction', speakerId,
-        params: { direction },
-        text,
-        variant,
-        signature: `direction:${direction}:${variant}`,
-        visual: { kind: 'direction', direction },
-      });
-    });
-  }
-
-  for (const max of [1, 2, 3, 4]) {
-    const texts = [
-      `Está a ${max === 1 ? 'una cuadra' : `${max} cuadras`} o menos de acá.`,
-      `No está a más de ${max === 1 ? 'una cuadra' : `${max} cuadras`}.`,
-    ];
-    texts.forEach((text, variant) => options.push({
-      type: 'withinDistance', speakerId, params: { max }, text, variant,
-      signature: `within:${max}:${variant}`, visual: { kind: 'radius', max },
-    }));
-  }
-
-  for (const min of [1, 2, 3]) {
-    const texts = [
-      `Está a más de ${min === 1 ? 'una cuadra' : `${min} cuadras`} de acá.`,
-      `No lo busques a ${min === 1 ? 'una cuadra' : `${min} cuadras`} o menos.`,
-    ];
-    texts.forEach((text, variant) => options.push({
-      type: 'fartherThan', speakerId, params: { min }, text, variant,
-      signature: `farther:${min}:${variant}`, visual: { kind: 'radius', min },
-    }));
-  }
-
-  for (const streetKey of speaker.adjacentStreetKeys) {
-    [
-      'Está sobre esta calle.',
-      'Vive junto a esta calle.',
-      'Su lote mira a esta calle.',
-      'Buscalo sobre esta calle.',
-    ].forEach((text, variant) => options.push({
-      type: 'onStreet', speakerId, params: { streetKey }, text, variant,
-      signature: `onStreet:${streetKey}:${variant}`,
-      visual: { kind: 'street', streetKeys: [streetKey] },
-    }));
-    [
-      'No vive sobre esta calle.',
-      'Su lote no mira a esta calle.',
-      'No está junto a esta calle.',
-      'No lo busques sobre esta calle.',
-    ].forEach((text, variant) => options.push({
-      type: 'notOnStreet', speakerId, params: { streetKey }, text, variant,
-      signature: `notOnStreet:${streetKey}:${variant}`,
-      visual: { kind: 'street', streetKeys: [streetKey] },
-    }));
-  }
-
-  const add=(type,text,params={},visual=null)=>options.push({type,speakerId,params,text,visual,signature:`${type}:${JSON.stringify(params)}:${text}`});
-  for(const [type,[family,predicate,texts]] of Object.entries(PROPERTY_CLUES)) for(const text of texts) add(type,text,type.startsWith('FRONTAGE_COUNT')?{count:1}:{});
+  const speaker=getHouseById(level,speakerId), options=[];
+  const add=(type,params={},visual=null,variant=0)=>{
+    const clue={type,speakerId,params,visual,variant};
+    clue.signature=clueWordingKey(clue);
+    options.push(clue);
+  };
+  for(const direction of ['north','south','east','west'])
+    clueTranslations.es.direction.forEach((_,variant)=>add('direction',{direction},{kind:'direction',direction},variant));
+  for(const max of [1,2,3,4])
+    clueTranslations.es.withinDistance.forEach((_,variant)=>add('withinDistance',{max},{kind:'radius',max},variant));
+  for(const min of [1,2,3])
+    clueTranslations.es.fartherThan.forEach((_,variant)=>add('fartherThan',{min},{kind:'radius',min},variant));
+  for(const streetKey of speaker.adjacentStreetKeys)
+    for(const type of ['onStreet','notOnStreet'])
+      clueTranslations.es[type].forEach((_,variant)=>add(type,{streetKey},{kind:'street',streetKeys:[streetKey]},variant));
+  for(const type of Object.keys(PROPERTY_CLUES))
+    clueTranslations.es[type].forEach((_,variant)=>add(type,type.startsWith('FRONTAGE_COUNT')?{count:1}:{},null,variant));
   for(const key of speaker.adjacentStreetKeys) {
     const visual={kind:'street',streetKeys:[key]};
-    add('FACES_PARALLEL_STREET','Su casa da a otra calle paralela a esta.',{streetKey:key},visual);
-    add('FACES_PERPENDICULAR_STREET','Su casa da a una calle perpendicular a esta.',{streetKey:key},visual);
+    add('FACES_PARALLEL_STREET',{streetKey:key},visual);
+    add('FACES_PERPENDICULAR_STREET',{streetKey:key},visual);
     if(separatingStreetKeys(level).includes(key)) {
-      add('SAME_SIDE_OF_STREET','Su casa está del mismo lado de esta calle que la mía.',{streetKey:key},visual);
-      add('OPPOSITE_SIDE_OF_STREET','Su casa está del otro lado de esta calle respecto de la mía.',{streetKey:key},visual);
+      add('SAME_SIDE_OF_STREET',{streetKey:key},visual);
+      add('OPPOSITE_SIDE_OF_STREET',{streetKey:key},visual);
     }
   }
   const keys=separatingStreetKeys(level);
   for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++) {
     if(keys[i][0]!==keys[j][0]) continue;
     const streetKeys=[keys[i],keys[j]].sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
-    add('BETWEEN_TWO_STREETS','Su casa está entre estas dos calles.',{streetKeys},{kind:'street',streetKeys});
+    add('BETWEEN_TWO_STREETS',{streetKeys},{kind:'street',streetKeys});
   }
-  // Access-based route predicates are registered and tested, but not emitted yet:
-  // the current UI does not show access nodes, so the route would be ambiguous.
+  // Routes stay disabled until the UI displays access nodes.
   if(level.levelNumber>=8) {
     const direction=options.filter(c=>c.type==='direction' && c.variant===0);
-    const simple=options.filter(c=>['AREA_GREATER_THAN_SPEAKER','HOUSE_VERTICAL','onStreet'].includes(c.type) && (!c.variant));
+    const simple=options.filter(c=>['AREA_GREATER_THAN_SPEAKER','HOUSE_VERTICAL','onStreet'].includes(c.type) && !c.variant);
     for(const a of direction) for(const b of simple) for(const type of ['AND','OR']) {
       const av=level.map.houses.map(h=>evaluateClue(level,a,h.id));
       const bv=level.map.houses.map(h=>evaluateClue(level,b,h.id));
       const combined=av.map((v,i)=>type==='AND'?v&&bv[i]:v||bv[i]);
       if(combined.every((v,i)=>v===av[i]) || combined.every((v,i)=>v===bv[i])) continue;
-      const text=`${a.text.slice(0,-1)} ${type==='AND'?'y':'o'} ${b.text[0].toLowerCase()+b.text.slice(1)}`;
-      add(type,text,{parts:[a,b]},b.visual);
+      add(type,{parts:[a,b]},b.visual);
     }
   }
   return options;
@@ -267,7 +221,6 @@ export function cloneClue(clue) {
     type: clue.type,
     speakerId: clue.speakerId,
     params: JSON.parse(JSON.stringify(clue.params)),
-    text: clue.text,
     variant: clue.variant ?? 0,
     signature: clue.signature,
     visual: clue.visual ? JSON.parse(JSON.stringify(clue.visual)) : null,

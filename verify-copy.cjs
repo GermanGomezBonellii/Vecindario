@@ -1,0 +1,31 @@
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=['config','copy','clue-copy','rng','map','clues','solver','generator','game','ui'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const elements={endMessage:{},endReveal:{}};
+const api=vm.runInNewContext(source+'\n({Game,UI,uiText,applyCopy,pickDecorativeText,generateLevel})',{setTimeout:fn=>fn(),document:{getElementById:id=>elements[id]}});
+const t=api.uiText,tKey=k=>k.split('.').reduce((v,p)=>v[p],t),html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
+for(const [,key] of html.matchAll(/data-copy="([^"]+)"/g)) assert.equal(typeof key.split('.').reduce((a,k)=>a[k],t),'string');
+const before=JSON.stringify(api.generateLevel('copy-regression',{levelNumber:3}));
+for(let i=0;i<100;i++) assert(t.interrogationOpeners.includes(api.pickDecorativeText(t.interrogationOpeners)));
+assert.equal(JSON.stringify(api.generateLevel('copy-regression',{levelNumber:3})),before);
+const g=Object.create(api.Game.prototype);
+let prompt='',testimony='',end=null;
+g.ui={setPrompt:(p,c)=>{prompt=p?tKey(p):'';testimony=c;},refresh(){},highlightClue(){},hideStartModal(){},showAccuseModal(){},playResolution:async()=>{},showEnd:x=>{end=x;},pulseHint(){},showNightTransition:async()=>{}};
+g.audio={select(){},interrogate(){},wrong(){},solve(){},night(){}};
+g.level={timed:false,murdererId:'H2',map:{houses:[{id:'H1',clue:{text:'Sin cambios'},availableUntil:20},{id:'H2',clue:{text:'Sin cambios'},availableUntil:20}]}};
+g.observations=[];g.score=3000;g.lives=3;g.currentHour=17;
+(async()=>{
+  g.start();assert.equal(prompt,t.investigation.entry);
+  g.start('assist');assert.equal(prompt,t.investigation.assist);
+  g.selectHouse('H1');assert.equal(prompt,t.investigation.select);
+  await g.interrogateSelected();assert(t.interrogationOpeners.includes(prompt));assert.equal(testimony,g.level.map.houses[0].clue);assert.equal(g.score,2900);
+  g.selectHouse('H1');assert.equal(prompt,t.investigation.asked);
+  g.level.timed=true;g.currentHour=22;g.selectHouse('H2');assert.equal(prompt,t.investigation.unavailableNight);
+  g.pendingAccusationId='H1';await g.confirmAccusation();assert(t.accusation.wrong.includes(prompt));assert.equal(g.lives,2);assert.equal(g.level.map.houses[0].mark,'cleared');
+  g.pendingAccusationId='H1';g.lives=1;await g.confirmAccusation();assert.equal(prompt,t.defeat.reveal);assert.equal(end.won,false);
+  g.finished=false;g.pendingAccusationId='H2';await g.confirmAccusation();assert.equal(end.won,true);assert.equal(prompt,'');
+  const ui={el:Object.fromEntries(['endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','newGameBtn'].map(k=>[k,{}])),syncModalLock(){}};
+  for(const won of [true,false]) {api.UI.prototype.showEnd.call(ui,{won,score:1000,questions:4,lives:won?2:0});assert.equal(ui.el.endTitle.textContent,won?t.victory.title:t.defeat.title);assert.equal(elements.endReveal.hidden,won);}
+  const normal=html.split('<section id="debugPanel"')[0];
+  assert(!/Reintentar misma seed|hipótesis|incompatibles|lógico-matemática/.test(normal));
+  console.log('Copy OK: referencias, inicio, modos, selección, interrogatorio, noche, acusación, victoria, derrota y azar independiente.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
