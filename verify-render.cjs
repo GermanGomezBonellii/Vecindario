@@ -203,7 +203,11 @@ for (const levelNumber of [1,5,12,20]) {
     api.UI.prototype.renderMap.call({el:{board:coastalBoard,app:{dataset:{}}}},coastal);
     const sea=coastalBoard.children.find(e=>e.attrs.id==='sea');
     assert.ok(sea,'falta el mar');
-    assert.equal(sea.children.length,2);
+    assert.equal(sea.children.length,3);
+    const outer=sea.children.find(e=>e.attrs.class==='sea-foam sea-outer');
+    assert.ok(outer);
+    assert.equal(Number(outer.attrs.x),0);
+    assert.equal(Number(outer.attrs.width),3);
     assert.equal(sea.attrs['data-side'],'left');
     const coastalRoads=coastalBoard.children.find(e=>e.attrs.id==='roads');
     assert.equal(coastalRoads.children.filter(e=>e.attrs.class==='road road-pier').length,api.coastGeometry(level.map,'left').pier?1:0);

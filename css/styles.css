@@ -36,6 +36,9 @@
   --transition: 180ms ease;
 }
 
+.car-swatch { width: 36px; height: 16px; margin: 12px auto; background: #e13d40; border-block: 4px solid #34383d; border-radius: 0; }
+#decorativeCar { pointer-events: none; }
+
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
 body {
@@ -366,9 +369,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 @media (max-width: 880px) { .app[data-coast="right"] .compass { left: 8px; } }
 .sea[data-side="left"] .sea-foam { transform-origin: right center; }
 .sea[data-side="right"] .sea-foam { transform-origin: left center; }
+.sea .sea-outer { opacity: .35; }
+.sea[data-side="left"] .sea-outer { transform-origin: left center; }
+.sea[data-side="right"] .sea-outer { transform-origin: right center; }
 @keyframes tide { from { transform: scaleX(1); } to { transform: scaleX(1.8); } }
 /* El tramo decorativo que desemboca en el mar: la misma calle, sin lotes detrás. */
-.road-pier { pointer-events: none; }
+.road-pier { pointer-events: none; stroke-linecap: butt; stroke-linejoin: miter; }
 /* Resaltado de calle. Hereda de .road el ancho y el remate, así que ocupa exactamente
    los mismos píxeles que la calzada: nunca asoma una punta fuera del barrio. */
 .street-highlight { stroke: var(--focus); pointer-events: none; }
@@ -378,6 +384,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .road-avenue { stroke-width: 22; stroke-linecap: butt; stroke-linejoin: miter; }
 .boulevard { pointer-events: none; }
 .avenue-median { fill: var(--avenue-median); transition: fill var(--transition); }
+.plaza { fill: var(--avenue-median); stroke: none; pointer-events: none; transition: fill var(--transition); }
 
 .compass { position: absolute; top: 12px; right: 12px; width: 78px; height: 78px; color: var(--ink); font-size: 10px; font-weight: 800; letter-spacing: .06em; }
 .compass::before, .compass::after { content: ''; position: absolute; background: currentColor; }
@@ -443,9 +450,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .end-stats span { display:block; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
 .end-stats strong { display:block; margin-top:4px; font-size:20px; }
 
-.logic-toggle { min-height: 40px; padding: 8px 10px; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--ink); border: 1px solid var(--border); border-radius: 11px; font-size: 11px; font-weight: 800; letter-spacing: .05em; cursor: pointer; }
-.logic-toggle.is-active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-.logic-toggle span { font-size: 9px; }
+.logic-toggle { min-height: 44px; min-width: 44px; padding: 4px 7px; display: inline-flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
+.logic-toggle:hover, .logic-toggle.is-active { background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink); border-color: var(--border); }
+.logic-toggle .logic-symbol { font-size: 19px; line-height: 1; font-weight: 500; }
+.logic-toggle .logic-caption { display: block; font-size: 8px; line-height: 1.2; letter-spacing: .02em; font-weight: 500; }
 
 .debug-panel { position: fixed; z-index: 30; right: 10px; bottom: 10px; width: min(460px, calc(100vw - 20px)); max-height: 70vh; overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 14px; padding: 12px; box-shadow: 0 25px 70px rgba(0,0,0,.4); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .debug-head { display:flex; justify-content:space-between; align-items:center; gap:12px; position:sticky; top:-12px; padding:12px 0 8px; background:var(--surface); }
@@ -483,7 +491,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   .status-kicker { font-size: 7px; }
   .icon-button { width: 36px; height: 36px; }
   .logic-toggle { min-width: 38px; padding: 8px; justify-content:center; }
-  .logic-toggle span { display:none; }
+  .logic-toggle .logic-caption { display:block; }
   .mode-options { grid-template-columns: 1fr; }
   .modal-actions.stacked-mobile { flex-direction: column-reverse; }
   .modal-actions.stacked-mobile button { width: 100%; }
@@ -516,3 +524,13 @@ html, .app { background: var(--bg); color: var(--ink); }
 button:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--focus); }
 button:disabled { background: var(--disabled-bg) !important; color: var(--disabled-text) !important; border-color: var(--border) !important; opacity: 1 !important; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .app, .app *, body { transition: none !important; } .sea-foam { animation: none !important; } }
+
+/* A single scrolling control rail; only the brand sits above it on mobile. */
+@media (max-width: 880px) {
+  .topbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
+  .statusbar { width: 100%; max-width: 100%; min-width: 0; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: var(--border) transparent; padding: 4px 3px 6px; }
+  .statusbar > * { flex: 0 0 auto; white-space: nowrap; }
+  .statusbar::-webkit-scrollbar { height: 3px; }
+  .statusbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .statusbar .logic-toggle { padding: 4px 6px; min-width: 44px; }
+}

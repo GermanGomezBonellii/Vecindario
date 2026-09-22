@@ -23,6 +23,7 @@ const CONFIG = {
   THEME_COST: 10000,
   COASTAL_COST: 20000,
   AVENUE_COST: 15000,
+  CAR_COST: 25000,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -127,8 +128,8 @@ spanishCopy.defeat.text='No te quedan vidas.';
 englishCopy.defeat.text="You have no lives left.";
 spanishCopy.lifePurchase={full:'Ya tenés todas las vidas.',poor:'Necesitás 3000 puntos.',ready:'Comprá una vida por 3000 puntos.'};
 englishCopy.lifePurchase={full:'Your lives are full.',poor:'You need 3000 points.',ready:'Buy one life for 3000 points.'};
-spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'Algunos barrios terminan contra el mar, con una calle que desemboca en la costa.',avenue:'Avenida con boulevard',avenueHelp:'Una calle importante se convierte en doble calzada, con una franja verde en el medio.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar'};
-englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'Some neighborhoods end at the sea, with one street running down to the shore.',avenue:'Boulevard Avenue',avenueHelp:'One major street becomes a dual carriageway with a green strip down the middle.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off'};
+spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'Algunos barrios terminan contra el mar, con una calle que desemboca en la costa.',car:'Auto',carHelp:'Un auto recorre las calles. Compra permanente; activalo para el próximo barrio.',carOn:'Activado',carOff:'Desactivado',avenue:'Avenida con boulevard',avenueHelp:'Una calle importante se convierte en doble calzada, con una franja verde en el medio.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar'};
+englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'Some neighborhoods end at the sea, with one street running down to the shore.',car:'Car',carHelp:'A car cruises the streets. Permanent purchase; enable it for the next neighborhood.',carOn:'On',carOff:'Off',avenue:'Boulevard Avenue',avenueHelp:'One major street becomes a dual carriageway with a green strip down the middle.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off'};
 spanishCopy.themes={
   day:{name:'Claro',short:'\u263c CLARO',help:'El barrio a plena luz. Siempre disponible.'},
   night:{name:'Oscuro',short:'\u263e OSCURO',help:'Tinta clara sobre fondo profundo. Siempre disponible.'},
@@ -492,6 +493,9 @@ const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
 const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
 const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
 
+function selectCoastSide(seed, levelNumber = 1) {
+  return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
+}
 function coastGeometry(map, side) {
   if (side !== 'left' && side !== 'right') return null;
   const shore = side === 'left' ? map.x[0] : map.x.at(-1);
@@ -548,42 +552,73 @@ function borderSegment(map, segment, blockIds) {
   return pair.filter((id) => blockIds.has(id)).length === 1;
 }
 
-function streetProfile(map, streetKey) {
-  const blockIds = new Set(map.blocks.map((b) => b.id));
-  const all = map.roadSegments.filter((s) => s.streetKey === streetKey);
-  const enabled = all.filter((s) => s.enabled);
-  if (!enabled.length) return null;
-  const ordinals = enabled.map((s) => s.segmentOrdinal).sort((a, b) => a - b);
-  // Sin huecos: los tramos activos tienen que ser consecutivos.
-  const contiguous = ordinals.every((o, i) => i === 0 || o === ordinals[i - 1] + 1);
-  // Atraviesa el barrio de un extremo al otro: ningún tramo de la calle falta.
-  const crosses = enabled.length === all.length;
-  const border = enabled.every((s) => borderSegment(map, s, blockIds));
-  const length = enabled.reduce((sum, s) => sum + Math.hypot(s.x2 - s.x1, s.y2 - s.y1), 0);
-  return { streetKey, orientation: enabled[0].orientation, segments: enabled, contiguous, crosses, border, length };
-}
 
-function avenueStreet(map, { exclude = [] } = {}) {
-  const keys = [...new Set(map.roadSegments.filter((s) => s.enabled).map((s) => s.streetKey))];
-  const candidates = keys
-    .filter((key) => !exclude.includes(key))
-    .map((key) => streetProfile(map, key))
-    .filter((p) => p && p.contiguous && p.segments.length >= 2 && (p.crosses || p.border));
-  if (!candidates.length) return null;
-  // Prioridad: atraviesa el barrio, después contorno exterior, después la más larga.
-  candidates.sort((a, b) => (Number(b.crosses) - Number(a.crosses))
-    || (Number(b.border) - Number(a.border))
-    || (b.length - a.length)
-    || a.streetKey.localeCompare(b.streetKey));
-  const chosen = candidates[0];
-  return { ...chosen, reason: chosen.crosses ? 'crosses' : 'border' };
-}
 
 // Geometría de dibujo. El asfalto es un único trazo continuo a lo ancho de toda la
 // avenida: sin uniones, no puede quedar ningún hueco. La franja verde se pinta
 // encima y se corta solamente donde hay una intersección real, es decir donde una
 // calle perpendicular llega a ese nodo. Las puntas llegan tan lejos como las de
 // cualquier calle del barrio (media calzada más allá del último nodo), ni más ni menos.
+function exteriorCells(map) {
+  const occupied=new Set(map.blocks.map(b=>b.c+','+b.r)), seen=new Set(), queue=[[-1,-1]];
+  for(let i=0;i<queue.length;i++) {
+    const [c,r]=queue[i], key=c+','+r;
+    if(c < -1 || c>map.cols || r < -1 || r>map.rows || occupied.has(key) || seen.has(key)) continue;
+    seen.add(key); queue.push([c-1,r],[c+1,r],[c,r-1],[c,r+1]);
+  }
+  return seen;
+}
+
+function streetProfile(map, streetKey) {
+  const enabled=map.roadSegments.filter(s=>s.streetKey===streetKey && s.enabled).sort((a,b)=>a.segmentOrdinal-b.segmentOrdinal);
+  if(!enabled.length) return null;
+  const horizontal=enabled[0].orientation==='H', axis=horizontal?enabled[0].y1:enabled[0].x1;
+  const lo=s=>horizontal?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+  const hi=s=>horizontal?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+  const eps=.001;
+  const contiguous=enabled.every((s,i)=>!i || Math.abs(lo(s)-hi(enabled[i-1]))<eps);
+  const touching=map.blocks.filter(b=>axis >= (horizontal?b.y:b.x)-eps && axis <= (horizontal?b.y+b.height:b.x+b.width)+eps);
+  const from=Math.min(...touching.map(b=>horizontal?b.x:b.y));
+  const to=Math.max(...touching.map(b=>horizontal?b.x+b.width:b.y+b.height));
+  const crosses=touching.length>0 && contiguous && Math.abs(lo(enabled[0])-from)<eps && Math.abs(hi(enabled.at(-1))-to)<eps;
+  const occupied=new Set(map.blocks.map(b=>b.c+','+b.r)), exterior=exteriorCells(map);
+  const sides=enabled.map(s=>{
+    const cells=horizontal?[[s.c,s.r-1,'top'],[s.c,s.r,'bottom']]:[[s.c-1,s.r,'left'],[s.c,s.r,'right']];
+    if(cells.filter(([c,r])=>occupied.has(c+','+r)).length!==1) return null;
+    const empty=cells.find(([c,r])=>!occupied.has(c+','+r));
+    return exterior.has(empty[0]+','+empty[1])?empty[2]:null;
+  });
+  const border=sides.every(Boolean);
+  const interior=enabled.some(s=> horizontal
+    ? occupied.has(s.c+','+(s.r-1)) && occupied.has(s.c+','+s.r)
+    : occupied.has((s.c-1)+','+s.r) && occupied.has(s.c+','+s.r));
+  const length=enabled.reduce((sum,s)=>sum+hi(s)-lo(s),0);
+  return {streetKey,orientation:enabled[0].orientation,segments:enabled,contiguous,crosses,border,interior,borderSides:[...new Set(sides.filter(Boolean))],length};
+}
+
+function avenueStreet(map, {exclude=[],seed='',coastSide=null}={}) {
+  const candidates=[...new Set(map.roadSegments.map(s=>s.streetKey))].sort()
+    .filter(key=>!exclude.includes(key)).map(key=>streetProfile(map,key))
+    .filter(p=>p && p.contiguous && p.segments.length>=2);
+  let pool=candidates.filter(p=>p.interior && p.crosses && !p.border);
+  const reason=pool.length?'crosses':'border';
+  if(!pool.length) {
+    pool=candidates.filter(p=>p.border && !p.borderSides.includes(coastSide));
+    if(coastSide) {
+      const opposite=coastSide==='left'?'right':'left';
+      const lateral=pool.filter(p=>p.orientation==='V' && p.borderSides.includes(opposite));
+      if(lateral.length) pool=lateral;
+    }
+  }
+  if(!pool.length) return null;
+  const rng=createRng(String(seed)+'|avenue|'+(coastSide||'inland'));
+  const max=Math.max(...pool.map(p=>p.length));
+  const weights=pool.map(p=>(p.length/max)**2);
+  let roll=rng()*weights.reduce((a,b)=>a+b,0);
+  const chosen=pool.find((_,i)=>(roll-=weights[i])<=0)||pool.at(-1);
+  return {...chosen,reason};
+}
+
 function crossesAt(map, street, index) {
   const horizontal = street.orientation === 'H';
   const row = street.segments[0].r;
@@ -1439,6 +1474,8 @@ function safeReadUnlock(id) {
 
 const COASTAL_ID = 'coastal';
 const COASTAL_PREF = 'vecindario.style.coastal';
+const CAR_ID = 'car';
+const CAR_PREF = 'vecindario.style.car';
 const AVENUE_ID = 'avenue';
 const AVENUE_PREF = 'vecindario.style.avenue';
 
@@ -1462,6 +1499,8 @@ function safeClearUnlocks() {
     localStorage.removeItem(COASTAL_PREF);
     localStorage.removeItem(UNLOCK_PREFIX + AVENUE_ID);
     localStorage.removeItem(AVENUE_PREF);
+    localStorage.removeItem(UNLOCK_PREFIX + CAR_ID);
+    localStorage.removeItem(CAR_PREF);
     localStorage.removeItem('vecindario-theme');
   } catch (_) { /* file:// can block storage */ }
 }
@@ -1482,6 +1521,8 @@ class Game {
     this.coastalEnabled = this.coastalUnlocked && safeReadStyle(COASTAL_PREF);
     this.avenueUnlocked = safeReadUnlock(AVENUE_ID);
     this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
+    this.carUnlocked = safeReadUnlock(CAR_ID);
+    this.carEnabled = this.carUnlocked && safeReadStyle(CAR_PREF);
     this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
@@ -1499,10 +1540,11 @@ class Game {
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
     // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
     // caso con costa o sin ella.
-    this.level.coastSide = this.coastalEnabled ? (createRng(`${seed}|coast`)() < 0.5 ? 'left' : 'right') : null;
-    // La avenida no necesita azar: sale de la geometría, así que la misma seed con
+    this.level.coastSide = this.coastalEnabled ? selectCoastSide(seed, this.levelNumber) : null;
+    // Sorteo visual independiente: la misma seed con
     // la misma configuración elige siempre la misma calle.
-    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { exclude: this.avenueExclusions() }) : null;
+    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { seed: `${seed}|level:${this.levelNumber}`, coastSide: this.level.coastSide, exclude: this.avenueExclusions() }) : null;
+    this.level.carEnabled = Boolean(this.carEnabled);
     this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
@@ -1747,12 +1789,32 @@ class Game {
 
   toggleAvenue() { return this.setAvenue(!this.avenueEnabled); }
 
+  canBuyCar() { return Boolean(this.shopOpen && this.lastOutcomeWon && !this.carUnlocked && this.score >= CONFIG.CAR_COST); }
+  buyCar() {
+    if (!this.canBuyCar()) return false;
+    this.score -= CONFIG.CAR_COST;
+    this.carUnlocked = true;
+    safeSaveUnlock(CAR_ID);
+    this.setCar(true);
+    return true;
+  }
+  setCar(enabled) {
+    if (!this.carUnlocked || !this.shopOpen) return false;
+    this.carEnabled = Boolean(enabled);
+    safeSaveStyle(CAR_PREF, this.carEnabled);
+    this.ui.refresh();
+    return true;
+  }
+  toggleCar() { return this.setCar(!this.carEnabled); }
+
   resetUnlocks() {
     safeClearUnlocks();
     this.coastalUnlocked = false;
     this.coastalEnabled = false;
     this.avenueUnlocked = false;
     this.avenueEnabled = false;
+    this.carUnlocked = false;
+    this.carEnabled = false;
     this.unlockedThemes = new Set(FREE_THEME_IDS);
     if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
     safeSaveTheme(this.theme);
@@ -1897,7 +1959,89 @@ class AudioManager {
   night() { this.tone(220, .18, .018, 'triangle'); }
 }
 
+// ---- car.js ----
+
+// A private navigation view: never changes the logical graph or consumes its RNG.
+function createCarRoute(map, avenue, seed) {
+  const rng=createRng(`${seed}|decorative-car`), adjacency=new Map(), visits=new Map();
+  const add=(id,edge)=>{if(!adjacency.has(id)) adjacency.set(id,[]);adjacency.get(id).push(edge);};
+  for(const s of map.roadSegments.filter(s=>s.enabled)) {
+    const length=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+    for(const reverse of [false,true]) {
+      const from=reverse?s.b:s.a,to=reverse?s.a:s.b;
+      const dx=(reverse?s.x1-s.x2:s.x2-s.x1)/length,dy=(reverse?s.y1-s.y2:s.y2-s.y1)/length;
+      const offset=s.streetKey===avenue?.streetKey?(AVENUE_MEDIAN+AVENUE_ROADWAY)/2:0;
+      add(from,{from,to,id:s.id,dx,dy,x:(reverse?s.x2:s.x1)-dy*offset,y:(reverse?s.y2:s.y1)+dx*offset,length});
+    }
+  }
+  // Remove dead ends only from this decorative view, avoiding U-turns across medians.
+  const queue=[...adjacency.keys()].filter(id=>adjacency.get(id).length<2);
+  for(let i=0;i<queue.length;i++) {
+    const id=queue[i];
+    for(const e of adjacency.get(id)||[]) {
+      const other=(adjacency.get(e.to)||[]).filter(a=>a.to!==id);
+      adjacency.set(e.to,other);if(other.length===1) queue.push(e.to);
+    }
+    adjacency.delete(id);
+  }
+  const edges=[...adjacency.values()].flat();
+  if(!edges.length) return null;
+  let incoming=rng.pick(edges),position={x:incoming.x+incoming.dx*incoming.length/2,y:incoming.y+incoming.dy*incoming.length/2};
+  const initial={...position,angle:Math.atan2(incoming.dy,incoming.dx)*180/Math.PI};
+  const next=()=>{
+    const choices=adjacency.get(incoming.to).filter(e=>e.to!==incoming.from);
+    const weights=choices.map(e=>1/(1+(visits.get(e.id)||0))**2);
+    let roll=rng()*weights.reduce((a,b)=>a+b,0),out=choices.at(-1);
+    for(let i=0;i<choices.length;i++){roll-=weights[i];if(roll<=0){out=choices[i];break;}}
+    visits.set(out.id,(visits.get(out.id)||0)+1);
+    const turn=incoming.dx*out.dy-incoming.dy*out.dx,radius=2;
+    const end={x:incoming.x+incoming.dx*incoming.length,y:incoming.y+incoming.dy*incoming.length};
+    const corner=incoming.dx?{x:out.x,y:end.y}:{x:end.x,y:out.y};
+    const entry=turn?{x:corner.x-incoming.dx*radius,y:corner.y-incoming.dy*radius}:end;
+    const start=position,angle=Math.atan2(incoming.dy,incoming.dx)*180/Math.PI;
+    const length=Math.hypot(entry.x-start.x,entry.y-start.y);
+    const phases=[{duration:length/10,sample(t){const u=t-.35*Math.sin(2*Math.PI*t)/(2*Math.PI);return {x:start.x+(entry.x-start.x)*u,y:start.y+(entry.y-start.y)*u,angle};}}];
+    position=entry;
+    if(turn) {
+      const dx=incoming.dx,dy=incoming.dy,ox=out.dx,oy=out.dy;
+      const center={x:entry.x+ox*radius,y:entry.y+oy*radius};
+      phases.push({duration:radius*Math.PI/2/6.5,sample(t){const a=t*Math.PI/2;return {x:center.x-ox*radius*Math.cos(a)+dx*radius*Math.sin(a),y:center.y-oy*radius*Math.cos(a)+dy*radius*Math.sin(a),angle:angle+turn*90*t};}});
+      position={x:corner.x+ox*radius,y:corner.y+oy*radius};
+    }
+    incoming=out;
+    return phases;
+  };
+  return {initial,next};
+}
+
+function mountCar(svg,map,avenue,seed) {
+  const route=createCarRoute(map,avenue,seed);
+  if(!route) return ()=>{};
+  const group=document.createElementNS('http://www.w3.org/2000/svg','g');
+  group.setAttribute('id','decorativeCar');group.setAttribute('pointer-events','none');group.setAttribute('aria-hidden','true');
+  // Four wheels and one body; local +X is forward. Total footprint: 6 x 4.
+  for(const [x,y,w,h,fill] of [[-2.4,-2,1.4,1,'#34383d'],[1,-2,1.4,1,'#34383d'],[-2.4,1,1.4,1,'#34383d'],[1,1,1.4,1,'#34383d'],[-3,-1.4,6,2.8,'#e13d40']]) {
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    for(const [key,value] of Object.entries({x,y,width:w,height:h,fill})) rect.setAttribute(key,value);
+    group.appendChild(rect);
+  }
+  const draw=p=>group.setAttribute('transform',`translate(${p.x} ${p.y}) rotate(${p.angle})`);
+  draw(route.initial);svg.appendChild(group);
+  const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  let frames=route.next(),elapsed=0,last=null,raf=null,disposed=false;
+  const frame=now=>{
+    raf=null;if(disposed||document.hidden||motion.matches)return;
+    if(last!==null) elapsed+=Math.min((now-last)/1000,.1);last=now;
+    while(elapsed>=frames[0].duration){elapsed-=frames.shift().duration;if(!frames.length)frames=route.next();}
+    draw(frames[0].sample(elapsed/frames[0].duration));raf=requestAnimationFrame(frame);
+  };
+  const sync=()=>{if(raf!==null)cancelAnimationFrame(raf);raf=null;last=null;if(!disposed&&!document.hidden&&!motion.matches)raf=requestAnimationFrame(frame);};
+  document.addEventListener('visibilitychange',sync);motion.addEventListener('change',sync);sync();
+  return ()=>{disposed=true;if(raf!==null)cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',sync);motion.removeEventListener('change',sync);group.remove();};
+}
+
 // ---- ui.js ----
+
 
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs = {}) {
@@ -1906,14 +2050,63 @@ function svgEl(tag, attrs = {}) {
   return el;
 }
 
+// Decorative only: scan the validated fine lattice without modifying the map.
+function detectPlazas(map, levelNumber = 1) {
+  const limit=levelNumber>=50?2:1;
+  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
+  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
+  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
+  const roads=map.roadSegments.filter(s=>s.enabled);
+  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
+  const validCell=(c,r)=>{
+    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
+    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
+  };
+  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
+  const along=(orientation,x,y,sign)=>roads.some(s=>{
+    if(s.orientation!==orientation) return false;
+    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
+    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+    const start=orientation==='H'?x:y;
+    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
+  });
+  const candidates=[];
+  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
+    let valid=true;
+    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
+    if(!valid) continue;
+    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
+    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
+    const right=rect.x+size,bottom=rect.y+size;
+    const crossed=roads.some(s=>s.orientation==='H'
+      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
+      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
+    if(crossed) continue;
+    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
+    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
+    if(cornerCount) candidates.push({...rect,cornerCount});
+  }
+  // Prefer well-defined corners, then proximity to the neighborhood center.
+  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
+  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
+  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
+  const plazas=[];
+  for(const candidate of candidates) {
+    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
+    if(plazas.length>=limit) break;
+  }
+  return plazas;
+}
+
 class UI {
   constructor(game) {
     this.game = game;
     this.el = Object.fromEntries([
-      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
+      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopCarCard','shopCarState','shopCarBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -1971,6 +2164,10 @@ class UI {
       if(this.game.coastalUnlocked) this.game.toggleCoastal();
       else this.game.buyCoastal();
     });
+    this.el.shopCarBtn.addEventListener('click',()=>{
+      if(this.game.carUnlocked) this.game.toggleCar();
+      else this.game.buyCar();
+    });
     this.el.shopAvenueBtn.addEventListener('click',()=>{
       if(this.game.avenueUnlocked) this.game.toggleAvenue();
       else this.game.buyAvenue();
@@ -1978,7 +2175,6 @@ class UI {
     this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
     this.buildThemeShelf();
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
-    this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
     this.el.retryBtn.addEventListener('click', () => this.game.retry());
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
@@ -2004,6 +2200,8 @@ class UI {
   }
 
   renderMap(level) {
+    this.disposeCar?.();
+    this.disposeCar = null;
     const svg = this.el.board;
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
@@ -2025,6 +2223,13 @@ class UI {
       const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
+      // The outer water extends beyond the viewport; animate a subtle visible
+      // edge inside the crop using the same lightweight tide as the shore.
+      const edgeWidth=3;
+      sea.appendChild(svgEl('rect', {
+        class:'sea-foam sea-outer', x:coast.side==='left'?0:level.map.width-edgeWidth,
+        y:coast.water.y, width:edgeWidth, height:coast.water.height,
+      }));
       svg.appendChild(sea);
     }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
@@ -2121,7 +2326,13 @@ class UI {
     svg.appendChild(housesGroup);
     // Back to front: occupied lots, fine grid, then uninterrupted streets.
     svg.appendChild(lotsGroup);
+    const plazasGroup=svgEl('g',{id:'plazas','aria-hidden':'true','pointer-events':'none'});
+    for(const {x,y,width,height} of detectPlazas(level.map, level.levelNumber)) {
+      plazasGroup.appendChild(svgEl('rect',{class:'plaza',x,y,width,height}));
+    }
+    svg.appendChild(plazasGroup);
     svg.appendChild(roadsGroup);
+    if(level.carEnabled) this.disposeCar=mountCar(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`);
   }
 
   getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
@@ -2142,8 +2353,6 @@ class UI {
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
     this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
-    this.el.soundToggle.setAttribute('aria-pressed', String(g.audio.enabled));
-    this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed && !g.shopOpen) {
@@ -2283,6 +2492,12 @@ class UI {
     this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
     this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
 
+    this.el.shopCarCard.classList.toggle('is-active',g.carUnlocked && g.carEnabled);
+    this.el.shopCarCard.classList.toggle('is-locked',!g.carUnlocked);
+    this.el.shopCarState.textContent=g.carUnlocked ? t(g.carEnabled?'shop.carOn':'shop.carOff') : '−'+CONFIG.CAR_COST.toLocaleString(coastLocale);
+    this.el.shopCarBtn.textContent=t(g.carUnlocked ? (g.carEnabled?'shop.turnOff':'shop.turnOn') : 'shop.buy');
+    this.el.shopCarBtn.disabled=!g.carUnlocked && g.score<CONFIG.CAR_COST;
+    this.el.shopCarBtn.setAttribute('aria-pressed',String(g.carUnlocked && g.carEnabled));
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
     const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
     this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');

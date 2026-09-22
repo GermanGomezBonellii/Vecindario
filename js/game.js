@@ -3,7 +3,7 @@ import { t, pickDecorativeKey } from './copy.js';
 import { generateLevel, batchValidate } from './generator.js';
 import { bestHintHouse } from './solver.js';
 import { randomSeed, createRng } from './rng.js';
-import { phaseForHour, avenueStreet, coastGeometry } from './map.js';
+import { phaseForHour, avenueStreet, coastGeometry, selectCoastSide } from './map.js';
 import { AudioManager } from './audio.js';
 import { UI } from './ui.js';
 import { runInternalTests } from './tests.js';
@@ -29,6 +29,8 @@ function safeReadUnlock(id) {
 
 const COASTAL_ID = 'coastal';
 const COASTAL_PREF = 'vecindario.style.coastal';
+const CAR_ID = 'car';
+const CAR_PREF = 'vecindario.style.car';
 const AVENUE_ID = 'avenue';
 const AVENUE_PREF = 'vecindario.style.avenue';
 
@@ -52,6 +54,8 @@ function safeClearUnlocks() {
     localStorage.removeItem(COASTAL_PREF);
     localStorage.removeItem(UNLOCK_PREFIX + AVENUE_ID);
     localStorage.removeItem(AVENUE_PREF);
+    localStorage.removeItem(UNLOCK_PREFIX + CAR_ID);
+    localStorage.removeItem(CAR_PREF);
     localStorage.removeItem('vecindario-theme');
   } catch (_) { /* file:// can block storage */ }
 }
@@ -72,6 +76,8 @@ export class Game {
     this.coastalEnabled = this.coastalUnlocked && safeReadStyle(COASTAL_PREF);
     this.avenueUnlocked = safeReadUnlock(AVENUE_ID);
     this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
+    this.carUnlocked = safeReadUnlock(CAR_ID);
+    this.carEnabled = this.carUnlocked && safeReadStyle(CAR_PREF);
     this.shopOpen=false;
     this.lastOutcomeWon = false;
     this.audio = new AudioManager();
@@ -89,10 +95,11 @@ export class Game {
     this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
     // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
     // caso con costa o sin ella.
-    this.level.coastSide = this.coastalEnabled ? (createRng(`${seed}|coast`)() < 0.5 ? 'left' : 'right') : null;
-    // La avenida no necesita azar: sale de la geometría, así que la misma seed con
+    this.level.coastSide = this.coastalEnabled ? selectCoastSide(seed, this.levelNumber) : null;
+    // Sorteo visual independiente: la misma seed con
     // la misma configuración elige siempre la misma calle.
-    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { exclude: this.avenueExclusions() }) : null;
+    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { seed: `${seed}|level:${this.levelNumber}`, coastSide: this.level.coastSide, exclude: this.avenueExclusions() }) : null;
+    this.level.carEnabled = Boolean(this.carEnabled);
     this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
@@ -337,12 +344,32 @@ export class Game {
 
   toggleAvenue() { return this.setAvenue(!this.avenueEnabled); }
 
+  canBuyCar() { return Boolean(this.shopOpen && this.lastOutcomeWon && !this.carUnlocked && this.score >= CONFIG.CAR_COST); }
+  buyCar() {
+    if (!this.canBuyCar()) return false;
+    this.score -= CONFIG.CAR_COST;
+    this.carUnlocked = true;
+    safeSaveUnlock(CAR_ID);
+    this.setCar(true);
+    return true;
+  }
+  setCar(enabled) {
+    if (!this.carUnlocked || !this.shopOpen) return false;
+    this.carEnabled = Boolean(enabled);
+    safeSaveStyle(CAR_PREF, this.carEnabled);
+    this.ui.refresh();
+    return true;
+  }
+  toggleCar() { return this.setCar(!this.carEnabled); }
+
   resetUnlocks() {
     safeClearUnlocks();
     this.coastalUnlocked = false;
     this.coastalEnabled = false;
     this.avenueUnlocked = false;
     this.avenueEnabled = false;
+    this.carUnlocked = false;
+    this.carEnabled = false;
     this.unlockedThemes = new Set(FREE_THEME_IDS);
     if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
     safeSaveTheme(this.theme);

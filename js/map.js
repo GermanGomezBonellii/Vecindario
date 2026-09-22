@@ -1,3 +1,4 @@
+import { createRng } from './rng.js';
 const SVG_W = 1000;
 const SVG_H = 700;
 const MARGIN_X = 76;
@@ -199,6 +200,9 @@ export const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
 export const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
 export const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
 
+export function selectCoastSide(seed, levelNumber = 1) {
+  return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
+}
 export function coastGeometry(map, side) {
   if (side !== 'left' && side !== 'right') return null;
   const shore = side === 'left' ? map.x[0] : map.x.at(-1);
@@ -255,42 +259,73 @@ function borderSegment(map, segment, blockIds) {
   return pair.filter((id) => blockIds.has(id)).length === 1;
 }
 
-export function streetProfile(map, streetKey) {
-  const blockIds = new Set(map.blocks.map((b) => b.id));
-  const all = map.roadSegments.filter((s) => s.streetKey === streetKey);
-  const enabled = all.filter((s) => s.enabled);
-  if (!enabled.length) return null;
-  const ordinals = enabled.map((s) => s.segmentOrdinal).sort((a, b) => a - b);
-  // Sin huecos: los tramos activos tienen que ser consecutivos.
-  const contiguous = ordinals.every((o, i) => i === 0 || o === ordinals[i - 1] + 1);
-  // Atraviesa el barrio de un extremo al otro: ningún tramo de la calle falta.
-  const crosses = enabled.length === all.length;
-  const border = enabled.every((s) => borderSegment(map, s, blockIds));
-  const length = enabled.reduce((sum, s) => sum + Math.hypot(s.x2 - s.x1, s.y2 - s.y1), 0);
-  return { streetKey, orientation: enabled[0].orientation, segments: enabled, contiguous, crosses, border, length };
-}
 
-export function avenueStreet(map, { exclude = [] } = {}) {
-  const keys = [...new Set(map.roadSegments.filter((s) => s.enabled).map((s) => s.streetKey))];
-  const candidates = keys
-    .filter((key) => !exclude.includes(key))
-    .map((key) => streetProfile(map, key))
-    .filter((p) => p && p.contiguous && p.segments.length >= 2 && (p.crosses || p.border));
-  if (!candidates.length) return null;
-  // Prioridad: atraviesa el barrio, después contorno exterior, después la más larga.
-  candidates.sort((a, b) => (Number(b.crosses) - Number(a.crosses))
-    || (Number(b.border) - Number(a.border))
-    || (b.length - a.length)
-    || a.streetKey.localeCompare(b.streetKey));
-  const chosen = candidates[0];
-  return { ...chosen, reason: chosen.crosses ? 'crosses' : 'border' };
-}
 
 // Geometría de dibujo. El asfalto es un único trazo continuo a lo ancho de toda la
 // avenida: sin uniones, no puede quedar ningún hueco. La franja verde se pinta
 // encima y se corta solamente donde hay una intersección real, es decir donde una
 // calle perpendicular llega a ese nodo. Las puntas llegan tan lejos como las de
 // cualquier calle del barrio (media calzada más allá del último nodo), ni más ni menos.
+function exteriorCells(map) {
+  const occupied=new Set(map.blocks.map(b=>b.c+','+b.r)), seen=new Set(), queue=[[-1,-1]];
+  for(let i=0;i<queue.length;i++) {
+    const [c,r]=queue[i], key=c+','+r;
+    if(c < -1 || c>map.cols || r < -1 || r>map.rows || occupied.has(key) || seen.has(key)) continue;
+    seen.add(key); queue.push([c-1,r],[c+1,r],[c,r-1],[c,r+1]);
+  }
+  return seen;
+}
+
+export function streetProfile(map, streetKey) {
+  const enabled=map.roadSegments.filter(s=>s.streetKey===streetKey && s.enabled).sort((a,b)=>a.segmentOrdinal-b.segmentOrdinal);
+  if(!enabled.length) return null;
+  const horizontal=enabled[0].orientation==='H', axis=horizontal?enabled[0].y1:enabled[0].x1;
+  const lo=s=>horizontal?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+  const hi=s=>horizontal?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+  const eps=.001;
+  const contiguous=enabled.every((s,i)=>!i || Math.abs(lo(s)-hi(enabled[i-1]))<eps);
+  const touching=map.blocks.filter(b=>axis >= (horizontal?b.y:b.x)-eps && axis <= (horizontal?b.y+b.height:b.x+b.width)+eps);
+  const from=Math.min(...touching.map(b=>horizontal?b.x:b.y));
+  const to=Math.max(...touching.map(b=>horizontal?b.x+b.width:b.y+b.height));
+  const crosses=touching.length>0 && contiguous && Math.abs(lo(enabled[0])-from)<eps && Math.abs(hi(enabled.at(-1))-to)<eps;
+  const occupied=new Set(map.blocks.map(b=>b.c+','+b.r)), exterior=exteriorCells(map);
+  const sides=enabled.map(s=>{
+    const cells=horizontal?[[s.c,s.r-1,'top'],[s.c,s.r,'bottom']]:[[s.c-1,s.r,'left'],[s.c,s.r,'right']];
+    if(cells.filter(([c,r])=>occupied.has(c+','+r)).length!==1) return null;
+    const empty=cells.find(([c,r])=>!occupied.has(c+','+r));
+    return exterior.has(empty[0]+','+empty[1])?empty[2]:null;
+  });
+  const border=sides.every(Boolean);
+  const interior=enabled.some(s=> horizontal
+    ? occupied.has(s.c+','+(s.r-1)) && occupied.has(s.c+','+s.r)
+    : occupied.has((s.c-1)+','+s.r) && occupied.has(s.c+','+s.r));
+  const length=enabled.reduce((sum,s)=>sum+hi(s)-lo(s),0);
+  return {streetKey,orientation:enabled[0].orientation,segments:enabled,contiguous,crosses,border,interior,borderSides:[...new Set(sides.filter(Boolean))],length};
+}
+
+export function avenueStreet(map, {exclude=[],seed='',coastSide=null}={}) {
+  const candidates=[...new Set(map.roadSegments.map(s=>s.streetKey))].sort()
+    .filter(key=>!exclude.includes(key)).map(key=>streetProfile(map,key))
+    .filter(p=>p && p.contiguous && p.segments.length>=2);
+  let pool=candidates.filter(p=>p.interior && p.crosses && !p.border);
+  const reason=pool.length?'crosses':'border';
+  if(!pool.length) {
+    pool=candidates.filter(p=>p.border && !p.borderSides.includes(coastSide));
+    if(coastSide) {
+      const opposite=coastSide==='left'?'right':'left';
+      const lateral=pool.filter(p=>p.orientation==='V' && p.borderSides.includes(opposite));
+      if(lateral.length) pool=lateral;
+    }
+  }
+  if(!pool.length) return null;
+  const rng=createRng(String(seed)+'|avenue|'+(coastSide||'inland'));
+  const max=Math.max(...pool.map(p=>p.length));
+  const weights=pool.map(p=>(p.length/max)**2);
+  let roll=rng()*weights.reduce((a,b)=>a+b,0);
+  const chosen=pool.find((_,i)=>(roll-=weights[i])<=0)||pool.at(-1);
+  return {...chosen,reason};
+}
+
 function crossesAt(map, street, index) {
   const horizontal = street.orientation === 'H';
   const row = street.segments[0].r;

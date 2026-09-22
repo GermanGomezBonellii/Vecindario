@@ -28,13 +28,12 @@
         <div class="status-item"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></div>
         <div class="status-item"><span class="status-kicker" data-copy="labels.lives"></span><strong id="livesValue">● ● ●</strong></div>
         <button class="status-item time-status theme-toggle" id="timeStatus" type="button" data-copy-aria="aria.night"><span class="status-kicker" data-copy="labels.environment"></span><strong id="timeValue">☼ CLARO</strong></button>
-        <button id="logicToggle" class="logic-toggle" type="button" aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic">∑ <span data-copy="labels.logic"></span></button>
+        <button id="logicToggle" class="logic-toggle" type="button" aria-expanded="false" aria-controls="debugPanel" data-copy-aria="aria.logic"><span class="logic-symbol" aria-hidden="true">∑</span><span class="logic-caption" data-copy="labels.logic"></span></button>
         <div class="language-switch" role="group" data-copy-aria="aria.language">
           <button type="button" data-language="es" data-copy-aria="aria.es" aria-pressed="true">ES</button>
           <span aria-hidden="true">/</span>
           <button type="button" data-language="en" data-copy-aria="aria.en" aria-pressed="false">EN</button>
         </div>
-        <button id="soundToggle" class="icon-button" type="button" aria-pressed="true" data-copy-aria="aria.sound">◒</button>
       </div>
     </header>
 
@@ -166,6 +165,13 @@
             <p data-copy="shop.coastalHelp"></p>
             <strong id="shopCoastalState"></strong>
             <button id="shopCoastalBtn" class="modal-secondary" type="button"></button>
+          </article>
+          <article class="shop-item shop-life-card" id="shopCarCard">
+            <div class="car-swatch" aria-hidden="true"></div>
+            <h3 data-copy="shop.car"></h3>
+            <p data-copy="shop.carHelp"></p>
+            <strong id="shopCarState"></strong>
+            <button id="shopCarBtn" class="modal-secondary" type="button"></button>
           </article>
           <article class="shop-item shop-life-card" id="shopAvenueCard">
             <div class="avenue-swatch" aria-hidden="true"><i></i><b></b><i></i></div>

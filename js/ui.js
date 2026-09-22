@@ -7,6 +7,8 @@ import { renderClue } from './clue-copy.js';
 import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { houseSizeCounts } from './map.js';
 
+import { mountCar } from './car.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs = {}) {
   const el = document.createElementNS(NS, tag);
@@ -14,14 +16,63 @@ function svgEl(tag, attrs = {}) {
   return el;
 }
 
+// Decorative only: scan the validated fine lattice without modifying the map.
+export function detectPlazas(map, levelNumber = 1) {
+  const limit=levelNumber>=50?2:1;
+  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
+  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
+  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
+  const roads=map.roadSegments.filter(s=>s.enabled);
+  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
+  const validCell=(c,r)=>{
+    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
+    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
+  };
+  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
+  const along=(orientation,x,y,sign)=>roads.some(s=>{
+    if(s.orientation!==orientation) return false;
+    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
+    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+    const start=orientation==='H'?x:y;
+    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
+  });
+  const candidates=[];
+  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
+    let valid=true;
+    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
+    if(!valid) continue;
+    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
+    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
+    const right=rect.x+size,bottom=rect.y+size;
+    const crossed=roads.some(s=>s.orientation==='H'
+      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
+      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
+    if(crossed) continue;
+    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
+    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
+    if(cornerCount) candidates.push({...rect,cornerCount});
+  }
+  // Prefer well-defined corners, then proximity to the neighborhood center.
+  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
+  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
+  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
+  const plazas=[];
+  for(const candidate of candidates) {
+    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
+    if(plazas.length>=limit) break;
+  }
+  return plazas;
+}
+
 export class UI {
   constructor(game) {
     this.game = game;
     this.el = Object.fromEntries([
-      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','soundToggle','seedLabel','modeBadge','casePrompt','testimony','selectedState',
+      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopCarCard','shopCarState','shopCarBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
@@ -79,6 +130,10 @@ export class UI {
       if(this.game.coastalUnlocked) this.game.toggleCoastal();
       else this.game.buyCoastal();
     });
+    this.el.shopCarBtn.addEventListener('click',()=>{
+      if(this.game.carUnlocked) this.game.toggleCar();
+      else this.game.buyCar();
+    });
     this.el.shopAvenueBtn.addEventListener('click',()=>{
       if(this.game.avenueUnlocked) this.game.toggleAvenue();
       else this.game.buyAvenue();
@@ -86,7 +141,6 @@ export class UI {
     this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
     this.buildThemeShelf();
     this.el.logicToggle.addEventListener('click', () => this.toggleLogicPanel());
-    this.el.soundToggle.addEventListener('click', () => this.game.toggleSound());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
     this.el.retryBtn.addEventListener('click', () => this.game.retry());
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
@@ -112,6 +166,8 @@ export class UI {
   }
 
   renderMap(level) {
+    this.disposeCar?.();
+    this.disposeCar = null;
     const svg = this.el.board;
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
@@ -133,6 +189,13 @@ export class UI {
       const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
+      // The outer water extends beyond the viewport; animate a subtle visible
+      // edge inside the crop using the same lightweight tide as the shore.
+      const edgeWidth=3;
+      sea.appendChild(svgEl('rect', {
+        class:'sea-foam sea-outer', x:coast.side==='left'?0:level.map.width-edgeWidth,
+        y:coast.water.y, width:edgeWidth, height:coast.water.height,
+      }));
       svg.appendChild(sea);
     }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
@@ -229,7 +292,13 @@ export class UI {
     svg.appendChild(housesGroup);
     // Back to front: occupied lots, fine grid, then uninterrupted streets.
     svg.appendChild(lotsGroup);
+    const plazasGroup=svgEl('g',{id:'plazas','aria-hidden':'true','pointer-events':'none'});
+    for(const {x,y,width,height} of detectPlazas(level.map, level.levelNumber)) {
+      plazasGroup.appendChild(svgEl('rect',{class:'plaza',x,y,width,height}));
+    }
+    svg.appendChild(plazasGroup);
     svg.appendChild(roadsGroup);
+    if(level.carEnabled) this.disposeCar=mountCar(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`);
   }
 
   getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
@@ -250,8 +319,6 @@ export class UI {
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
     this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
-    this.el.soundToggle.setAttribute('aria-pressed', String(g.audio.enabled));
-    this.el.soundToggle.textContent = g.audio.enabled ? '◒' : '○';
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed && !g.shopOpen) {
@@ -391,6 +458,12 @@ export class UI {
     this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
     this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
 
+    this.el.shopCarCard.classList.toggle('is-active',g.carUnlocked && g.carEnabled);
+    this.el.shopCarCard.classList.toggle('is-locked',!g.carUnlocked);
+    this.el.shopCarState.textContent=g.carUnlocked ? t(g.carEnabled?'shop.carOn':'shop.carOff') : '−'+CONFIG.CAR_COST.toLocaleString(coastLocale);
+    this.el.shopCarBtn.textContent=t(g.carUnlocked ? (g.carEnabled?'shop.turnOff':'shop.turnOn') : 'shop.buy');
+    this.el.shopCarBtn.disabled=!g.carUnlocked && g.score<CONFIG.CAR_COST;
+    this.el.shopCarBtn.setAttribute('aria-pressed',String(g.carUnlocked && g.carEnabled));
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
     const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
     this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');
