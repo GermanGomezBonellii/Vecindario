@@ -11,17 +11,18 @@ function makeSquareAxes(rng, cols, rows) {
   // Una única unidad geométrica para X e Y: nunca se estiran lotes ni casas.
   const usableWidth = SVG_W - MARGIN_X * 2;
   const usableHeight = SVG_H - MARGIN_Y * 2;
-  const widths = rng.shuffle(Array.from({ length: cols }, (_, i) => [1, 2, 3][i % 3]));
-  const heights = Array(rows).fill(2);
-  const cellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / (rows * 2));
+  const widths = rng.shuffle(Array.from({ length: cols }, (_, i) => [1, 2, 3, 4][i % 4]));
+  const heights = rng.shuffle(Array.from({ length: rows }, (_, i) => [2, 3, 4][i % 3]));
+  const totalRows = heights.reduce((a,b) => a+b);
+  const cellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / totalRows);
   const gridWidth = cellSize * widths.reduce((a,b) => a+b);
-  const gridHeight = cellSize * rows * 2;
+  const gridHeight = cellSize * totalRows;
   const left = (SVG_W - gridWidth) / 2;
   const top = (SVG_H - gridHeight) / 2;
   return {
     cellSize,
     x: [left, ...widths.map((_, i) => left + widths.slice(0, i+1).reduce((a,b) => a+b) * cellSize)],
-    y: [top, ...heights.map((_, i) => top + (i+1)*2*cellSize)],
+    y: [top, ...heights.map((_, i) => top + heights.slice(0,i+1).reduce((a,b)=>a+b) * cellSize)],
   };
 }
 
@@ -134,11 +135,31 @@ export function validateStreetTopology(map) {
     const block = map.blocks.find(b => b.id === house.blockId);
     if (!block || house.lot < 0 || house.lot >= block.lotCols * block.lotRows) return {valid:false, reason:'invalid_lot'};
     const col = house.lot % block.lotCols, row = Math.floor(house.lot / block.lotCols);
-    const sides = [row === 0 && 'top', row === block.lotRows-1 && 'bottom', col === 0 && 'left', col === block.lotCols-1 && 'right'].filter(Boolean);
+    const w = house.widthInCells, h = house.heightInCells;
+    if (!HOUSE_SHAPES.some(([a,b])=>a===w && b===h) || col+w>block.lotCols || row+h>block.lotRows) return {valid:false, reason:'invalid_house_shape'};
+    if (house.area !== w*h || Math.abs(house.rect.width-w*map.cellSize)>0.001 || Math.abs(house.rect.height-h*map.cellSize)>0.001 || Math.abs(house.rect.x-block.x-col*map.cellSize)>0.001 || Math.abs(house.rect.y-block.y-row*map.cellSize)>0.001) return {valid:false, reason:'invalid_house_geometry'};
+    const sides = [row === 0 && 'top', row+h === block.lotRows && 'bottom', col === 0 && 'left', col+w === block.lotCols && 'right'].filter(Boolean);
     const keys = sides.filter(side => map.roadSegments.some(s => s.enabled && s.id === sideSegmentId(block, side))).map(side => sideStreetKey(block, side));
     if (!keys.length || !keys.includes(house.primaryStreetKey) || keys.length !== house.adjacentStreetKeys.length || keys.some(key => !house.adjacentStreetKeys.includes(key))) return {valid:false, reason:'invalid_street_frontage'};
+    const horizontal=keys.some(k=>k[0]==='H'),vertical=keys.some(k=>k[0]==='V');
+    const free=(col>0?h:0)+(col+w<block.lotCols?h:0)+(row>0?w:0)+(row+h<block.lotRows?w:0);
+    const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
+    const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
+    if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
   }
-  if (!map.houses.every((house) => Math.abs(house.rect.width - house.rect.height) < 0.001)) return { valid: false, reason: 'non_square_house' };
+  for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
+    const a=map.houses[i].rect,b=map.houses[j].rect;
+    if (Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>0.001 && Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>0.001) return {valid:false,reason:'house_overlap'};
+    for(const horizontal of [true,false]) {
+      const lo=horizontal?Math.max(a.x,b.x):Math.max(a.y,b.y);
+      const hi=horizontal?Math.min(a.x+a.width,b.x+b.width):Math.min(a.y+a.height,b.y+b.height);
+      const adjacent=horizontal?(Math.abs(a.y+a.height-b.y)<0.001 || Math.abs(b.y+b.height-a.y)<0.001):(Math.abs(a.x+a.width-b.x)<0.001 || Math.abs(b.x+b.width-a.x)<0.001);
+      if(!adjacent || hi-lo<=0.001) continue;
+      const at=horizontal?Math.max(a.y,b.y):Math.max(a.x,b.x);
+      if(!map.roadSegments.some(s=>s.enabled && s.orientation===(horizontal?'H':'V') && Math.abs((horizontal?s.y1:s.x1)-at)<0.001 && (horizontal?s.x1:s.y1)<=lo+0.001 && (horizontal?s.x2:s.y2)>=hi-0.001)) return {valid:false,reason:'visually_merged_houses'};
+    }
+  }
   return { valid: true };
 }
 
@@ -155,6 +176,8 @@ function sideStreetKey(block, side) {
   if (side === 'left') return vStreetKey(block.c);
   return vStreetKey(block.c + 1);
 }
+
+export const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
 export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0 } = {}) {
   const { x, y, cellSize } = makeSquareAxes(rng, cols, rows);
@@ -196,11 +219,13 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
   const viableBlocks = blocks.filter((block) => block.enabledSides.length > 0);
   const selectedBlocks = rng.shuffle(viableBlocks).slice(0, Math.min(houseCount, viableBlocks.length));
   const houses = selectedBlocks.map((block, i) => {
+    const [widthInCells, heightInCells] = rng.pick(HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows));
     const sidesForLot = (lot) => {
       const col = lot % block.lotCols, row = Math.floor(lot / block.lotCols);
-      return [row === 0 && 'top', row === block.lotRows-1 && 'bottom', col === 0 && 'left', col === block.lotCols-1 && 'right'].filter(Boolean);
+      return [row === 0 && 'top', row+heightInCells === block.lotRows && 'bottom', col === 0 && 'left', col+widthInCells === block.lotCols && 'right'].filter(Boolean);
     };
     const validLots = Array.from({length: block.lotCols * block.lotRows}, (_, i) => i).filter((lot) => {
+      if (lot%block.lotCols+widthInCells>block.lotCols || Math.floor(lot/block.lotCols)+heightInCells>block.lotRows) return false;
       const sides = sidesForLot(lot);
       return sides.some((side) => segmentById.get(sideSegmentId(block, side))?.enabled);
     });
@@ -213,8 +238,8 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
     const south = lotRow >= block.lotRows / 2;
     const rx = block.x + lotCol * halfW + inset;
     const ry = block.y + lotRow * halfH + inset;
-    const rw = halfW - inset * 2;
-    const rh = halfH - inset * 2;
+    const rw = halfW * widthInCells;
+    const rh = halfH * heightInCells;
     const center = { x: rx + rw / 2, y: ry + rh / 2 };
 
     const lotSides = sidesForLot(lot);
@@ -230,7 +255,16 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
     if (access.side === 'right') accessNodeId = nodeId(block.c + 1, south ? block.r + 1 : block.r);
 
     return {
-      id: `H${i + 1}`, blockId: block.id, lot, rect: { x: rx, y: ry, width: rw, height: rh }, center,
+      id: `H${i + 1}`, blockId: block.id, lot, widthInCells, heightInCells, area:widthInCells*heightInCells,
+      isHorizontal:widthInCells>heightInCells, isVertical:heightInCells>widthInCells,
+      isSquare:widthInCells===heightInCells, isElongated:Math.max(widthInCells,heightInCells)>=2*Math.min(widthInCells,heightInCells),
+      streetSides:candidateBorders.map(b=>b.side), frontageCount:candidateBorders.length,
+      facesHorizontalStreet:candidateBorders.some(b=>b.streetKey.startsWith('H')),
+      facesVerticalStreet:candidateBorders.some(b=>b.streetKey.startsWith('V')),
+      touchesCorner:candidateBorders.some(b=>b.streetKey.startsWith('H')) && candidateBorders.some(b=>b.streetKey.startsWith('V')),
+      freeAdjacentCells:(lotCol>0 ? heightInCells:0)+(lotCol+widthInCells<block.lotCols ? heightInCells:0)+(lotRow>0 ? widthInCells:0)+(lotRow+heightInCells<block.lotRows ? widthInCells:0),
+      freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
+      rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
       adjacentStreetKeys: [...new Set(candidateBorders.map((b) => b.streetKey))],
       asked: false, mark: null, confirmedInnocent: false,

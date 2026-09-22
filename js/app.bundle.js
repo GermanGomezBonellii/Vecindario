@@ -14,13 +14,22 @@ const CONFIG = {
   SUNSET_HOUR: 18,
   NIGHT_HOUR: 20,
   GENERATION_ATTEMPTS: 700,
-  MIN_STANDALONE_CANDIDATES: 2, // Ningún interrogatorio puede resolver el caso por sí solo.
+  MIN_CANDIDATES_AFTER_SINGLE_CLUE: 2,
+  MAX_CLUE_FAMILY_FRACTION: 0.4,
+  MIN_CLUE_FAMILIES: 4,
   // Las pistas de distancia se conservan, pero son una excepción deliberada y no
   // la forma habitual de describir el barrio.
   CLUE_FAMILY_WEIGHTS: {
     direction: 1,
     street: 0.9,
     distance: 0.03,
+    size: 1,
+    orientation: 0.9,
+    frontage: 0.85,
+    relative: 0.9,
+    streetOrientation: 0.8,
+    space: 0.65,
+    compound: 0.4,
   },
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
@@ -78,17 +87,18 @@ function makeSquareAxes(rng, cols, rows) {
   // Una única unidad geométrica para X e Y: nunca se estiran lotes ni casas.
   const usableWidth = SVG_W - MARGIN_X * 2;
   const usableHeight = SVG_H - MARGIN_Y * 2;
-  const widths = rng.shuffle(Array.from({ length: cols }, (_, i) => [1, 2, 3][i % 3]));
-  const heights = Array(rows).fill(2);
-  const cellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / (rows * 2));
+  const widths = rng.shuffle(Array.from({ length: cols }, (_, i) => [1, 2, 3, 4][i % 4]));
+  const heights = rng.shuffle(Array.from({ length: rows }, (_, i) => [2, 3, 4][i % 3]));
+  const totalRows = heights.reduce((a,b) => a+b);
+  const cellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / totalRows);
   const gridWidth = cellSize * widths.reduce((a,b) => a+b);
-  const gridHeight = cellSize * rows * 2;
+  const gridHeight = cellSize * totalRows;
   const left = (SVG_W - gridWidth) / 2;
   const top = (SVG_H - gridHeight) / 2;
   return {
     cellSize,
     x: [left, ...widths.map((_, i) => left + widths.slice(0, i+1).reduce((a,b) => a+b) * cellSize)],
-    y: [top, ...heights.map((_, i) => top + (i+1)*2*cellSize)],
+    y: [top, ...heights.map((_, i) => top + heights.slice(0,i+1).reduce((a,b)=>a+b) * cellSize)],
   };
 }
 
@@ -201,11 +211,31 @@ function validateStreetTopology(map) {
     const block = map.blocks.find(b => b.id === house.blockId);
     if (!block || house.lot < 0 || house.lot >= block.lotCols * block.lotRows) return {valid:false, reason:'invalid_lot'};
     const col = house.lot % block.lotCols, row = Math.floor(house.lot / block.lotCols);
-    const sides = [row === 0 && 'top', row === block.lotRows-1 && 'bottom', col === 0 && 'left', col === block.lotCols-1 && 'right'].filter(Boolean);
+    const w = house.widthInCells, h = house.heightInCells;
+    if (!HOUSE_SHAPES.some(([a,b])=>a===w && b===h) || col+w>block.lotCols || row+h>block.lotRows) return {valid:false, reason:'invalid_house_shape'};
+    if (house.area !== w*h || Math.abs(house.rect.width-w*map.cellSize)>0.001 || Math.abs(house.rect.height-h*map.cellSize)>0.001 || Math.abs(house.rect.x-block.x-col*map.cellSize)>0.001 || Math.abs(house.rect.y-block.y-row*map.cellSize)>0.001) return {valid:false, reason:'invalid_house_geometry'};
+    const sides = [row === 0 && 'top', row+h === block.lotRows && 'bottom', col === 0 && 'left', col+w === block.lotCols && 'right'].filter(Boolean);
     const keys = sides.filter(side => map.roadSegments.some(s => s.enabled && s.id === sideSegmentId(block, side))).map(side => sideStreetKey(block, side));
     if (!keys.length || !keys.includes(house.primaryStreetKey) || keys.length !== house.adjacentStreetKeys.length || keys.some(key => !house.adjacentStreetKeys.includes(key))) return {valid:false, reason:'invalid_street_frontage'};
+    const horizontal=keys.some(k=>k[0]==='H'),vertical=keys.some(k=>k[0]==='V');
+    const free=(col>0?h:0)+(col+w<block.lotCols?h:0)+(row>0?w:0)+(row+h<block.lotRows?w:0);
+    const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
+    const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
+    if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
   }
-  if (!map.houses.every((house) => Math.abs(house.rect.width - house.rect.height) < 0.001)) return { valid: false, reason: 'non_square_house' };
+  for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
+    const a=map.houses[i].rect,b=map.houses[j].rect;
+    if (Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>0.001 && Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>0.001) return {valid:false,reason:'house_overlap'};
+    for(const horizontal of [true,false]) {
+      const lo=horizontal?Math.max(a.x,b.x):Math.max(a.y,b.y);
+      const hi=horizontal?Math.min(a.x+a.width,b.x+b.width):Math.min(a.y+a.height,b.y+b.height);
+      const adjacent=horizontal?(Math.abs(a.y+a.height-b.y)<0.001 || Math.abs(b.y+b.height-a.y)<0.001):(Math.abs(a.x+a.width-b.x)<0.001 || Math.abs(b.x+b.width-a.x)<0.001);
+      if(!adjacent || hi-lo<=0.001) continue;
+      const at=horizontal?Math.max(a.y,b.y):Math.max(a.x,b.x);
+      if(!map.roadSegments.some(s=>s.enabled && s.orientation===(horizontal?'H':'V') && Math.abs((horizontal?s.y1:s.x1)-at)<0.001 && (horizontal?s.x1:s.y1)<=lo+0.001 && (horizontal?s.x2:s.y2)>=hi-0.001)) return {valid:false,reason:'visually_merged_houses'};
+    }
+  }
   return { valid: true };
 }
 
@@ -222,6 +252,8 @@ function sideStreetKey(block, side) {
   if (side === 'left') return vStreetKey(block.c);
   return vStreetKey(block.c + 1);
 }
+
+const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
 function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0 } = {}) {
   const { x, y, cellSize } = makeSquareAxes(rng, cols, rows);
@@ -263,11 +295,13 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
   const viableBlocks = blocks.filter((block) => block.enabledSides.length > 0);
   const selectedBlocks = rng.shuffle(viableBlocks).slice(0, Math.min(houseCount, viableBlocks.length));
   const houses = selectedBlocks.map((block, i) => {
+    const [widthInCells, heightInCells] = rng.pick(HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows));
     const sidesForLot = (lot) => {
       const col = lot % block.lotCols, row = Math.floor(lot / block.lotCols);
-      return [row === 0 && 'top', row === block.lotRows-1 && 'bottom', col === 0 && 'left', col === block.lotCols-1 && 'right'].filter(Boolean);
+      return [row === 0 && 'top', row+heightInCells === block.lotRows && 'bottom', col === 0 && 'left', col+widthInCells === block.lotCols && 'right'].filter(Boolean);
     };
     const validLots = Array.from({length: block.lotCols * block.lotRows}, (_, i) => i).filter((lot) => {
+      if (lot%block.lotCols+widthInCells>block.lotCols || Math.floor(lot/block.lotCols)+heightInCells>block.lotRows) return false;
       const sides = sidesForLot(lot);
       return sides.some((side) => segmentById.get(sideSegmentId(block, side))?.enabled);
     });
@@ -280,8 +314,8 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
     const south = lotRow >= block.lotRows / 2;
     const rx = block.x + lotCol * halfW + inset;
     const ry = block.y + lotRow * halfH + inset;
-    const rw = halfW - inset * 2;
-    const rh = halfH - inset * 2;
+    const rw = halfW * widthInCells;
+    const rh = halfH * heightInCells;
     const center = { x: rx + rw / 2, y: ry + rh / 2 };
 
     const lotSides = sidesForLot(lot);
@@ -297,7 +331,16 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
     if (access.side === 'right') accessNodeId = nodeId(block.c + 1, south ? block.r + 1 : block.r);
 
     return {
-      id: `H${i + 1}`, blockId: block.id, lot, rect: { x: rx, y: ry, width: rw, height: rh }, center,
+      id: `H${i + 1}`, blockId: block.id, lot, widthInCells, heightInCells, area:widthInCells*heightInCells,
+      isHorizontal:widthInCells>heightInCells, isVertical:heightInCells>widthInCells,
+      isSquare:widthInCells===heightInCells, isElongated:Math.max(widthInCells,heightInCells)>=2*Math.min(widthInCells,heightInCells),
+      streetSides:candidateBorders.map(b=>b.side), frontageCount:candidateBorders.length,
+      facesHorizontalStreet:candidateBorders.some(b=>b.streetKey.startsWith('H')),
+      facesVerticalStreet:candidateBorders.some(b=>b.streetKey.startsWith('V')),
+      touchesCorner:candidateBorders.some(b=>b.streetKey.startsWith('H')) && candidateBorders.some(b=>b.streetKey.startsWith('V')),
+      freeAdjacentCells:(lotCol>0 ? heightInCells:0)+(lotCol+widthInCells<block.lotCols ? heightInCells:0)+(lotRow>0 ? widthInCells:0)+(lotRow+heightInCells<block.lotRows ? widthInCells:0),
+      freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
+      rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
       adjacentStreetKeys: [...new Set(candidateBorders.map((b) => b.streetKey))],
       asked: false, mark: null, confirmedInnocent: false,
@@ -348,10 +391,10 @@ function phaseForHour(hour, config) {
 // ---- clues.js ----
 
 const DIRECTION_TEXT = {
-  north: ['Está al norte de mi casa.', 'Buscalo hacia el norte.', 'Vive más al norte que yo.'],
-  south: ['Está al sur de mi casa.', 'Buscalo hacia el sur.', 'Vive más al sur que yo.'],
-  east: ['Está al este de mi casa.', 'Buscalo hacia el este.', 'Vive más al este que yo.'],
-  west: ['Está al oeste de mi casa.', 'Buscalo hacia el oeste.', 'Vive más al oeste que yo.'],
+  north: ['Está al norte de mi casa.', 'Yo miraría al norte de mi casa.', 'Desde mi casa queda hacia el norte.'],
+  south: ['Está al sur de mi casa.', 'Yo miraría al sur de mi casa.', 'Desde mi casa queda hacia el sur.'],
+  east: ['Está al este de mi casa.', 'Yo miraría al este de mi casa.', 'Desde mi casa queda hacia el este.'],
+  west: ['Está al oeste de mi casa.', 'Yo miraría al oeste de mi casa.', 'Desde mi casa queda hacia el oeste.'],
 };
 
 function evalDirection(level, speaker, candidate, direction) {
@@ -393,6 +436,99 @@ const CLUE_TYPES = {
     },
   },
 };
+
+// Registry: text variants share one exact predicate; the solver never reads text.
+const PROPERTY_CLUES = {
+  AREA_GREATER_THAN_SPEAKER: ['size', (c,s)=>c.area>s.area, ['Su casa es más grande que la mía.', 'Tiene más terreno construido que yo.']],
+  AREA_SMALLER_THAN_SPEAKER: ['size', (c,s)=>c.area<s.area, ['Su casa es más chica que la mía.', 'Tiene menos terreno construido que yo.']],
+  AREA_EQUAL_TO_SPEAKER: ['size', (c,s)=>c.area===s.area, ['Su casa ocupa lo mismo que la mía.']],
+  HOUSE_HORIZONTAL: ['orientation', c=>c.isHorizontal, ['Su casa se extiende más de este a oeste.']],
+  HOUSE_VERTICAL: ['orientation', c=>c.isVertical, ['Su casa se extiende más de norte a sur.']],
+  HOUSE_SQUARE: ['orientation', c=>c.isSquare, ['Su casa tiene forma cuadrada.']],
+  HOUSE_ELONGATED: ['orientation', c=>c.isElongated, ['El lado largo de su casa mide al menos el doble que el corto.']],
+  FRONTAGE_COUNT_GREATER_THAN: ['frontage', (c,s,p)=>c.frontageCount>p.count, ['Su casa tiene más de un frente a la calle.']],
+  FRONTAGE_COUNT_EQUALS: ['frontage', (c,s,p)=>c.frontageCount===p.count, ['Su casa tiene un solo frente a la calle.']],
+  FACES_MORE_THAN_ONE_STREET: ['frontage', c=>c.adjacentStreetKeys.length>1, ['Su casa mira a más de una calle.']],
+  CORNER_HOUSE: ['frontage', c=>c.touchesCorner, ['Su casa da a dos calles que forman una esquina.']],
+  HAS_FREE_ADJACENT_SPACE: ['space', c=>c.freeAdjacentCells>0, ['Tiene algún lote libre pegado a su casa, dentro de su manzana.']],
+  HAS_MULTIPLE_FREE_SIDES: ['space', c=>c.freeSides>=2, ['Tiene lotes libres junto a por lo menos dos lados de su casa, en su manzana.']],
+  MORE_OPEN_SPACE_THAN_SPEAKER: ['space', (c,s)=>c.freeAdjacentCells>s.freeAdjacentCells, ['Dentro de su manzana, tiene más lotes libres pegados a la casa que yo.']],
+  SPANS_MULTIPLE_GRID_CELLS: ['size', c=>c.area>1, ['Su casa ocupa más de un cuadrado de la retícula.']],
+};
+for (const [type, [family, predicate]] of Object.entries(PROPERTY_CLUES)) {
+  CLUE_TYPES[type] = { family, evaluate:(level,clue,candidate)=>predicate(candidate,getHouseById(level,clue.speakerId),clue.params) };
+}
+
+function streetSide(level, house, key) {
+  const street = getStreetSegments(level.map,key)[0];
+  if (!street) return 0;
+  const r=house.rect, eps=0.001;
+  const lo=street.orientation==='H'?r.y:r.x;
+  const hi=lo+(street.orientation==='H'?r.height:r.width);
+  const at=street.orientation==='H'?street.y1:street.x1;
+  return hi<=at+eps ? -1 : lo>=at-eps ? 1 : 0;
+}
+
+// Side/strip references are only emitted for continuous, full-span streets.
+function separatingStreetKeys(level) {
+  const map=level.map;
+  return [...new Set(map.roadSegments.filter(s=>s.enabled).map(s=>s.streetKey))].filter(key=>{
+    const segments=getStreetSegments(map,key);
+    const horizontal=segments[0].orientation==='H';
+    const count=horizontal?map.cols:map.rows;
+    return segments.length===count;
+  });
+}
+for (const [type,op] of [['SAME_SIDE_OF_STREET',1],['OPPOSITE_SIDE_OF_STREET',-1]]) {
+  CLUE_TYPES[type]={family:'relative',evaluate:(level,clue,c)=>{
+    const a=streetSide(level,getHouseById(level,clue.speakerId),clue.params.streetKey);
+    const b=streetSide(level,c,clue.params.streetKey);
+    return a!==0 && b===op*a;
+  }};
+}
+CLUE_TYPES.FACES_PARALLEL_STREET={family:'streetOrientation',evaluate:(level,clue,c)=>c.adjacentStreetKeys.some(k=>k!==clue.params.streetKey && k[0]===clue.params.streetKey[0])};
+CLUE_TYPES.FACES_PERPENDICULAR_STREET={family:'streetOrientation',evaluate:(level,clue,c)=>c.adjacentStreetKeys.some(k=>k[0]!==clue.params.streetKey[0])};
+CLUE_TYPES.BETWEEN_TWO_STREETS={family:'relative',evaluate:(level,clue,c)=>streetSide(level,c,clue.params.streetKeys[0])===1 && streetSide(level,c,clue.params.streetKeys[1])===-1};
+
+function reachableWithoutTurning(map, from, to) {
+  // Exact traversal of enabled edges on one axis, from the existing access nodes.
+  if (from.accessNodeId===to.accessNodeId) return true;
+  for (const orientation of ['H','V']) {
+    const seen=new Set([from.accessNodeId]), queue=[from.accessNodeId];
+    for(let i=0;i<queue.length;i++) for(const edge of map.graph.get(queue[i])||[]) {
+      const segment=map.roadSegments.find(s=>s.id===edge.segmentId);
+      if (!segment?.enabled || segment.orientation!==orientation || seen.has(edge.node)) continue;
+      if(edge.node===to.accessNodeId) return true;
+      seen.add(edge.node); queue.push(edge.node);
+    }
+  }
+  return false;
+}
+CLUE_TYPES.REACHABLE_WITHOUT_TURNING={family:'topology',evaluate:(level,clue,c)=>reachableWithoutTurning(level.map,getHouseById(level,clue.speakerId),c)};
+CLUE_TYPES.REQUIRES_TURN={family:'topology',evaluate:(level,clue,c)=>!reachableWithoutTurning(level.map,getHouseById(level,clue.speakerId),c)};
+for (const type of ['AND','OR']) CLUE_TYPES[type]={family:'compound',evaluate:(level,clue,c)=>{
+  if(clue.params.parts.length!==2 || clue.params.parts.some(p=>['AND','OR'].includes(p.type))) throw new Error('Compuesta inválida');
+  const values=clue.params.parts.map(p=>evaluateClue(level,p,c.id));
+  return type==='AND'?values.every(Boolean):values.some(Boolean);
+}};
+
+function clueFamily(clue) {
+  if(['withinDistance','fartherThan'].includes(clue.type)) return 'distance';
+  if(clue.type==='direction') return 'direction';
+  return CLUE_TYPES[clue.type]?.family || 'street';
+}
+
+const CLUE_FAMILY_LABELS = {direction:'Dirección',distance:'Distancia',street:'Calle',size:'Tamaño',orientation:'Forma',frontage:'Frentes',relative:'Posición respecto de calles',streetOrientation:'Orientación de calles',space:'Espacio libre',compound:'Compuesta',topology:'Recorrido'};
+
+function validateClueReference(level,clue) {
+  if(!CLUE_TYPES[clue.type] || !getHouseById(level,clue.speakerId)) return false;
+  const keys=clue.params.streetKeys || (clue.params.streetKey?[clue.params.streetKey]:[]);
+  if(keys.some(key=>!getStreetSegments(level.map,key).length)) return false;
+  if(keys.length && (clue.visual?.kind!=='street' || keys.some(key=>!clue.visual.streetKeys?.includes(key)))) return false;
+  if(['SAME_SIDE_OF_STREET','OPPOSITE_SIDE_OF_STREET','BETWEEN_TWO_STREETS'].includes(clue.type) && keys.some(key=>!separatingStreetKeys(level).includes(key))) return false;
+  if(['AND','OR'].includes(clue.type)) return clue.params.parts.length===2 && clue.params.parts.every(p=>!['AND','OR'].includes(p.type) && p.speakerId===clue.speakerId && validateClueReference(level,p));
+  return true;
+}
 
 function evaluateClue(level, clue, candidateId) {
   const candidate = getHouseById(level, candidateId);
@@ -446,7 +582,7 @@ function enumerateClueOptions(level, speakerId) {
       'Está sobre esta calle.',
       'Vive junto a esta calle.',
       'Su lote mira a esta calle.',
-      'Buscalo sobre este tramo.',
+      'Buscalo sobre esta calle.',
     ].forEach((text, variant) => options.push({
       type: 'onStreet', speakerId, params: { streetKey }, text, variant,
       signature: `onStreet:${streetKey}:${variant}`,
@@ -455,7 +591,7 @@ function enumerateClueOptions(level, speakerId) {
     [
       'No vive sobre esta calle.',
       'Su lote no mira a esta calle.',
-      'No está junto a este tramo.',
+      'No está junto a esta calle.',
       'No lo busques sobre esta calle.',
     ].forEach((text, variant) => options.push({
       type: 'notOnStreet', speakerId, params: { streetKey }, text, variant,
@@ -464,6 +600,37 @@ function enumerateClueOptions(level, speakerId) {
     }));
   }
 
+  const add=(type,text,params={},visual=null)=>options.push({type,speakerId,params,text,visual,signature:`${type}:${JSON.stringify(params)}:${text}`});
+  for(const [type,[family,predicate,texts]] of Object.entries(PROPERTY_CLUES)) for(const text of texts) add(type,text,type.startsWith('FRONTAGE_COUNT')?{count:1}:{});
+  for(const key of speaker.adjacentStreetKeys) {
+    const visual={kind:'street',streetKeys:[key]};
+    add('FACES_PARALLEL_STREET','Su casa da a otra calle paralela a esta.',{streetKey:key},visual);
+    add('FACES_PERPENDICULAR_STREET','Su casa da a una calle perpendicular a esta.',{streetKey:key},visual);
+    if(separatingStreetKeys(level).includes(key)) {
+      add('SAME_SIDE_OF_STREET','Su casa está del mismo lado de esta calle que la mía.',{streetKey:key},visual);
+      add('OPPOSITE_SIDE_OF_STREET','Su casa está del otro lado de esta calle respecto de la mía.',{streetKey:key},visual);
+    }
+  }
+  const keys=separatingStreetKeys(level);
+  for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++) {
+    if(keys[i][0]!==keys[j][0]) continue;
+    const streetKeys=[keys[i],keys[j]].sort((a,b)=>Number(a.slice(1))-Number(b.slice(1)));
+    add('BETWEEN_TWO_STREETS','Su casa está entre estas dos calles.',{streetKeys},{kind:'street',streetKeys});
+  }
+  // Access-based route predicates are registered and tested, but not emitted yet:
+  // the current UI does not show access nodes, so the route would be ambiguous.
+  if(level.levelNumber>=8) {
+    const direction=options.filter(c=>c.type==='direction' && c.variant===0);
+    const simple=options.filter(c=>['AREA_GREATER_THAN_SPEAKER','HOUSE_VERTICAL','onStreet'].includes(c.type) && (!c.variant));
+    for(const a of direction) for(const b of simple) for(const type of ['AND','OR']) {
+      const av=level.map.houses.map(h=>evaluateClue(level,a,h.id));
+      const bv=level.map.houses.map(h=>evaluateClue(level,b,h.id));
+      const combined=av.map((v,i)=>type==='AND'?v&&bv[i]:v||bv[i]);
+      if(combined.every((v,i)=>v===av[i]) || combined.every((v,i)=>v===bv[i])) continue;
+      const text=`${a.text.slice(0,-1)} ${type==='AND'?'y':'o'} ${b.text[0].toLowerCase()+b.text.slice(1)}`;
+      add(type,text,{parts:[a,b]},b.visual);
+    }
+  }
   return options;
 }
 
@@ -471,7 +638,7 @@ function cloneClue(clue) {
   return {
     type: clue.type,
     speakerId: clue.speakerId,
-    params: { ...clue.params },
+    params: JSON.parse(JSON.stringify(clue.params)),
     text: clue.text,
     variant: clue.variant ?? 0,
     signature: clue.signature,
@@ -514,9 +681,13 @@ function combinations(items, k, start = 0, prefix = [], out = []) {
 
 function findMinimumSolvingSubsets(level) {
   const allObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+  // Cache each predicate's truth mask once; subset search only intersects masks.
+  const masks=allObs.map(o=>level.map.houses.reduce((mask,h,i)=>isCandidateConsistent(level,h.id,[o])?mask|(1<<i):mask,0));
+  const target=1<<level.map.houses.findIndex(h=>h.id===level.murdererId);
+  const indices=allObs.map((_,i)=>i);
   for (let k = 1; k <= allObs.length; k += 1) {
-    const subsets = combinations(allObs, k);
-    const solving = subsets.filter((subset) => isUniqueSolution(level, subset, level.murdererId));
+    const subsets = combinations(indices, k);
+    const solving = subsets.filter(subset=>subset.reduce((mask,i)=>mask&masks[i],(1<<allObs.length)-1)===target).map(subset=>subset.map(i=>allObs[i]));
     if (solving.length) return { minimum: k, subsets: solving };
   }
   return { minimum: Infinity, subsets: [] };
@@ -549,7 +720,12 @@ function calculateDifficulty(level) {
     getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]),
   ]));
   const minimumSolvingHouseSets = minimum.subsets.map((subset) => subset.map((observation) => observation.houseId));
+  const familiesInMinimum = minimum.subsets.map(subset=>new Set(subset.flatMap(o=>o.clue.params.parts?o.clue.params.parts.map(clueFamily):[clueFamily(o.clue)])).size);
   return {
+    minimumSolutionFamilyRange: [Math.min(...familiesInMinimum),Math.max(...familiesInMinimum)],
+    compoundClueCount: level.map.houses.filter(h=>['AND','OR'].includes(h.clue.type)).length,
+    averagePredicateComplexity: level.map.houses.reduce((n,h)=>n+(h.clue.params.parts?3:1),0)/level.map.houses.length,
+    houseAreas: [...new Set(level.map.houses.map(h=>h.area))].sort((a,b)=>a-b),
     houseCount: level.map.houses.length,
     initialCandidates: level.map.houses.length,
     finalCandidates: getConsistentCandidates(level, fullObs).length,
@@ -602,12 +778,6 @@ function singleObservationCandidates(level, speakerId, clue) {
   return getConsistentCandidates(level, [{ houseId: speakerId, clue }]);
 }
 
-function clueFamily(clue) {
-  if (clue.type === 'withinDistance' || clue.type === 'fartherThan') return 'distance';
-  if (clue.type === 'direction') return 'direction';
-  return 'street';
-}
-
 function maxCluesForFamily(level, family) {
   if (family === 'distance') {
     return level.map.houses.length <= 10
@@ -615,7 +785,8 @@ function maxCluesForFamily(level, family) {
       : CONFIG.DISTANCE_CLUE_MAX_LARGE_LEVEL;
   }
   // Evita que una sola clase monopolice una seed, aun cuando sea la más común.
-  return Math.ceil(level.map.houses.length * 0.6);
+  if(family==='compound') return 2;
+  return Math.floor(level.map.houses.length * CONFIG.MAX_CLUE_FAMILY_FRACTION);
 }
 
 function weightedPick(rng, options) {
@@ -631,7 +802,7 @@ function weightedPick(rng, options) {
 function chooseClues(level, rng) {
   const usedTexts = new Set();
   const usedLogic = new Set();
-  const familyCounts = { direction: 0, street: 0, distance: 0 };
+  const familyCounts = Object.fromEntries(Object.keys(CONFIG.CLUE_FAMILY_WEIGHTS).map(f=>[f,0]));
   const houses = rng.shuffle(level.map.houses);
 
   for (const house of houses) {
@@ -640,7 +811,7 @@ function chooseClues(level, rng) {
       .filter((clue) => evaluateClue(level, clue, level.murdererId) === shouldBeTrue)
       .map((clue) => ({ clue, candidates: singleObservationCandidates(level, house.id, clue) }))
       .filter(({ candidates }) => candidates.includes(level.murdererId))
-      .filter(({ candidates }) => candidates.length >= CONFIG.MIN_STANDALONE_CANDIDATES && candidates.length < level.map.houses.length);
+      .filter(({ candidates }) => candidates.length >= CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE && candidates.length < level.map.houses.length);
 
     const target = level.map.houses.length * (level.profile.clueCandidateFraction || 0.5);
     const eligible = [];
@@ -661,10 +832,15 @@ function chooseClues(level, rng) {
         family,
         // Repetir una relación sigue siendo posible (la redundancia es válida),
         // pero con una penalización clara en lugar de bloquear la generación.
-        weight: (familyWeight / repetitionPenalty) * Math.exp(-quality * 1.15) * (usedLogic.has(logicKey) ? 0.35 : 1),
+        weight: (familyWeight / repetitionPenalty) * Math.exp(-quality * 1.15) * (usedLogic.has(logicKey) ? 0.35 : 1) * (level.levelNumber<=3 && option.candidates.length===2 ? 0.12 : 1),
       });
     }
     if (!eligible.length) return false;
+    // Family probability must not increase just because it has more wordings,
+    // reference streets or parameter combinations.
+    const availableCounts = {};
+    for(const o of eligible) availableCounts[o.family]=(availableCounts[o.family]||0)+1;
+    for(const o of eligible) o.weight/=availableCounts[o.family];
     const picked = weightedPick(rng, eligible);
     house.clue = cloneClue(picked.clue);
     familyCounts[picked.family] += 1;
@@ -716,17 +892,22 @@ function validateLevel(level) {
   const observations = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
   if (!isUniqueSolution(level, observations, level.murdererId)) return { valid: false, reason: 'ambiguous' };
   for (const house of level.map.houses) {
+    if(!validateClueReference(level,house.clue)) return {valid:false,reason:'invalid_reference'};
     const truth = evaluateClue(level, house.clue, level.murdererId);
     if (house.id === level.murdererId && truth) return { valid: false, reason: 'murderer_truth' };
     if (house.id !== level.murdererId && !truth) return { valid: false, reason: 'innocent_lie' };
     const singleton = singleObservationCandidates(level, house.id, house.clue);
     if (singleton.length === level.map.houses.length) return { valid: false, reason: 'empty_clue' };
-    if (singleton.length < CONFIG.MIN_STANDALONE_CANDIDATES) return { valid: false, reason: 'single_clue_unique' };
+    if (singleton.length < CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE) return { valid: false, reason: 'single_clue_unique' };
   }
   const texts = level.map.houses.map((h) => h.clue.text);
   if (new Set(texts).size !== texts.length) return { valid: false, reason: 'duplicate_text' };
   const distanceClues = level.map.houses.filter((h) => clueFamily(h.clue) === 'distance').length;
   if (distanceClues > maxCluesForFamily(level, 'distance')) return { valid: false, reason: 'distance_overrepresented' };
+  const counts={};
+  for(const h of level.map.houses) {const f=clueFamily(h.clue);counts[f]=(counts[f]||0)+1;}
+  if(Object.keys(counts).length<CONFIG.MIN_CLUE_FAMILIES || Object.entries(counts).some(([f,n])=>n>maxCluesForFamily(level,f))) return {valid:false,reason:'family_diversity'};
+  if(new Set(level.map.houses.map(h=>h.area)).size<2) return {valid:false,reason:'house_size_diversity'};
   const min = findMinimumSolvingSubsets(level).minimum;
   if (!Number.isFinite(min)) return { valid: false, reason: 'unsolved' };
   if (min < level.profile.minQuestions || min > level.profile.maxQuestions) return { valid: false, reason: 'difficulty' };
@@ -756,6 +937,7 @@ function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
     if (!verdict.valid) { lastReason = verdict.reason; continue; }
   level.metrics = calculateDifficulty(level);
     level.metrics.clueFamilyCounts = { ...level.clueFamilyCounts };
+    level.metrics.clueFamilyDistribution = { ...level.clueFamilyCounts };
     return level;
   }
   throw new Error(`No se pudo generar un nivel válido para seed ${seed}, nivel ${profile.levelNumber}. Último motivo: ${lastReason}`);
@@ -1184,6 +1366,12 @@ class UI {
     }
     defs.appendChild(neighborhoodClip);
     lotsGroup.setAttribute('clip-path', 'url(#neighborhood-grid-clip)');
+    // Remove internal lot lines from occupied rectangles, keeping houses whole.
+    const mask=svgEl('mask',{id:'occupied-grid-mask',maskUnits:'userSpaceOnUse',x:0,y:0,width:level.map.width,height:level.map.height});
+    mask.appendChild(svgEl('rect',{x:0,y:0,width:level.map.width,height:level.map.height,fill:'white'}));
+    for(const h of level.map.houses) mask.appendChild(svgEl('rect',{...h.rect,fill:'black'}));
+    defs.appendChild(mask);
+    lotsGroup.setAttribute('mask','url(#occupied-grid-mask)');
     const map = level.map;
     const step = map.cellSize;
     // Complete underlying lattice, clipped to existing urban blocks.
@@ -1421,7 +1609,9 @@ class UI {
       const standalone = metrics.standaloneCandidatesByHouse?.[h.id] || [];
       const truth = h.id === level.murdererId ? 'MENTIRA' : 'VERDAD';
       const asked = h.asked ? ' · interrogada' : '';
-      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · ${truth}`;
+      const inMinimum=minSets.some(set=>set.includes(h.id));
+      const actual=evaluateClue(level,h.clue,level.murdererId);
+      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  ${h.clue.type} · familia ${clueFamily(h.clue)}\n  predicado ${h.clue.type}(${JSON.stringify(h.clue.params)})\n  ${actual?'TRUE':'FALSE'} · ${truth} · en conjunto mínimo: ${inMinimum?'sí':'no'}\n  casa ${h.widthInCells}×${h.heightInCells} · área ${h.area} · frentes ${h.frontageCount}\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · información ${Math.log2(metrics.houseCount/standalone.length).toFixed(2)} bits`;
     });
     const lines = [
       `SEED  ${level.seed}`,
@@ -1433,7 +1623,10 @@ class UI {
       `REGLA “1 PISTA NO RESUELVE”  ${singleRulePass ? 'OK' : 'ERROR'}${singleRulePass ? '' : ` (${metrics.singleClueUniqueCount} pista/s inequívoca/s)`}`,
       `REDUCCIÓN MEDIA POR 1 PISTA  ${metrics.averageCandidateReduction}`,
       `REDUNDANCIA  ${metrics.redundancyScore}`,
-      `FAMILIAS DE PISTAS  dirección ${metrics.clueFamilyCounts?.direction || 0} · calle ${metrics.clueFamilyCounts?.street || 0} · distancia ${metrics.clueFamilyCounts?.distance || 0}`,
+      `DISTRIBUCIÓN DE FAMILIAS\n${Object.entries(metrics.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>`  ${CLUE_FAMILY_LABELS[f]||f}: ${n}`).join('\n')}`,
+      `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
+      `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
+      `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
       `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
       `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
       '',
@@ -1519,7 +1712,7 @@ function runInternalTests() {
     }),
     test('street breaks are clean gaps between T junctions', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`clean-streets-${i}`), {
       cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, spacingJitter: 0.24,
-    })).every((map) => validateStreetTopology(map).valid && map.roadSegments
+    })).every((map) => validateStreetTopology({ ...map, houses: [] }).valid && map.roadSegments
       .filter((segment) => !segment.enabled)
       .every((segment) => (map.graph.get(segment.a) || []).length === 3 && (map.graph.get(segment.b) || []).length === 3))),
     test('progressive levels increase neighborhood complexity', () => {
@@ -1527,9 +1720,8 @@ function runInternalTests() {
       const later = getLevelProfile(9);
       return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows && later.missingBlocks > 0;
     }),
-    test('rectangular blocks contain square lots and houses', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`square-layout-${i}`), {
-      cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2,
-    })).every((map) => validateStreetTopology(map).valid)),
+    test('accepted rectangular houses occupy complete square cells', () => Array.from({ length: 8 }, (_, i) => generateLevel(`square-layout-${i}`, { levelNumber:9 }).map)
+      .every((map) => validateStreetTopology(map).valid && map.houses.every(h=>Math.abs(h.rect.width/h.widthInCells-map.cellSize)<0.001 && Math.abs(h.rect.height/h.heightInCells-map.cellSize)<0.001))),
     test('irregular neighborhoods contain real missing blocks', () => {
       const map = generateMap(createRng('irregular-footprint'), { cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2 });
       return map.blocks.length === 18 && map.missingBlocks === 2;

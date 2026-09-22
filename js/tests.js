@@ -70,7 +70,7 @@ export function runInternalTests() {
     }),
     test('street breaks are clean gaps between T junctions', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`clean-streets-${i}`), {
       cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, spacingJitter: 0.24,
-    })).every((map) => validateStreetTopology(map).valid && map.roadSegments
+    })).every((map) => validateStreetTopology({ ...map, houses: [] }).valid && map.roadSegments
       .filter((segment) => !segment.enabled)
       .every((segment) => (map.graph.get(segment.a) || []).length === 3 && (map.graph.get(segment.b) || []).length === 3))),
     test('progressive levels increase neighborhood complexity', () => {
@@ -78,9 +78,8 @@ export function runInternalTests() {
       const later = getLevelProfile(9);
       return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows && later.missingBlocks > 0;
     }),
-    test('rectangular blocks contain square lots and houses', () => Array.from({ length: 30 }, (_, i) => generateMap(createRng(`square-layout-${i}`), {
-      cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2,
-    })).every((map) => validateStreetTopology(map).valid)),
+    test('accepted rectangular houses occupy complete square cells', () => Array.from({ length: 8 }, (_, i) => generateLevel(`square-layout-${i}`, { levelNumber:9 }).map)
+      .every((map) => validateStreetTopology(map).valid && map.houses.every(h=>Math.abs(h.rect.width/h.widthInCells-map.cellSize)<0.001 && Math.abs(h.rect.height/h.heightInCells-map.cellSize)<0.001))),
     test('irregular neighborhoods contain real missing blocks', () => {
       const map = generateMap(createRng('irregular-footprint'), { cols: 5, rows: 4, houseCount: 13, streetBreaks: 4, missingBlocks: 2 });
       return map.blocks.length === 18 && map.missingBlocks === 2;

@@ -1,5 +1,7 @@
 # Vecindario
 
+La ampliación de testimonios y casas multicelda está documentada en [TESTIMONIOS.md](TESTIMONIOS.md): familias activas, definiciones matemáticas, límites de diversidad, métricas y familias pendientes. Ejecutá `node verify-testimonies.cjs` para la validación masiva.
+
 Prototipo web de lógica y murder mystery. Cada barrio se genera proceduralmente a partir de una `seed`. Todos los vecinos inocentes dicen la verdad y el asesino es el único que miente.
 
 ## Abrir localmente
@@ -108,8 +110,8 @@ A partir del nivel 3 el generador puede retirar una cuadra completa entre dos cr
 
 ## Geometría del barrio
 
-El mapa usa una retícula fina de lotes cuadrados. Las calles se ubican en coordenadas enteras de esa retícula: las manzanas pueden ser 1×2, 2×2 o 3×2 (2, 4 y 6 lotes). Cada casa ocupa un lote cuadrado; sólo sus lados exteriores en contacto con un segmento activo cuentan como frente de calle. El SVG aplica `preserveAspectRatio` para ajustar todo el barrio con una escala uniforme.
+El mapa usa una retícula fina de lotes cuadrados. Las calles se ubican en coordenadas enteras de esa retícula: las manzanas tienen dimensiones variables y permiten casas rectangulares de 1×1, 1×2, 2×1, 1×3, 3×1, 1×4, 4×1 y 2×2. Sólo los lados exteriores reales de cada casa en contacto con un segmento activo cuentan como frente de calle. El SVG aplica `preserveAspectRatio` para ajustar todo el barrio con una escala uniforme.
 
-Las capas se dibujan en este orden: relleno de casas/lotes, retícula gris y calles negras por encima. Las casas rellenan exactamente su lote, sin margen interior ni esquinas redondeadas, y nunca tapan las calles. La retícula se recorta a la unión de las manzanas existentes: no aparece en huecos externos. Desde el nivel 3 pueden faltar manzanas completas.
+Las capas se dibujan en este orden: relleno de casas/lotes, retícula gris y calles negras por encima. Las casas rellenan exactamente sus celdas, sin margen interior ni esquinas redondeadas, y nunca tapan las calles. Una máscara elimina la retícula del interior de cada casa para que se vea como un único bloque continuo. La retícula se recorta a la unión de las manzanas existentes: no aparece en huecos externos. Desde el nivel 3 pueden faltar manzanas completas.
 
 Para regenerar el ejecutable: `node build.cjs`. Para comprobar geometría, frentes, pistas, determinismo y generación en niveles 1, 3, 5, 8, 12 y 20: `node verify-geometry.cjs`. Una seed reconstruye la misma partida dentro de esta versión; la refactorización cambia los mapas de versiones anteriores.

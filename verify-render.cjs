@@ -37,9 +37,13 @@ for (const levelNumber of [1,5,12,20]) {
       const b=level.map.blocks.find(b=>b.id===h.blockId),s=level.map.cellSize;
       assert.equal(h.rect.x,b.x+(h.lot%b.lotCols)*s);
       assert.equal(h.rect.y,b.y+Math.floor(h.lot/b.lotCols)*s);
-      assert.equal(h.rect.width,s); assert.equal(h.rect.height,s);
+      assert.equal(h.rect.width,s*h.widthInCells); assert.equal(h.rect.height,s*h.heightInCells);
       assert.equal(houses.children[i].children[0].attrs.rx,'0');
     });
+    assert.equal(grid.attrs.mask,'url(#occupied-grid-mask)');
+    const mask=board.children[0].children.find(e=>e.attrs.id==='occupied-grid-mask');
+    assert.equal(mask.children.length,level.map.houses.length+1);
+    level.map.houses.forEach((h,i)=>{for(const key of ['x','y','width','height']) assert.equal(Number(mask.children[i+1].attrs[key]),h.rect[key]);});
   }
   console.log(`Nivel ${levelNumber}: 3 seeds OK; capas, recorte, trama y lotes completos`);
 }

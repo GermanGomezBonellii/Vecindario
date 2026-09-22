@@ -10,13 +10,22 @@ export const CONFIG = {
   SUNSET_HOUR: 18,
   NIGHT_HOUR: 20,
   GENERATION_ATTEMPTS: 700,
-  MIN_STANDALONE_CANDIDATES: 2, // Ningún interrogatorio puede resolver el caso por sí solo.
+  MIN_CANDIDATES_AFTER_SINGLE_CLUE: 2,
+  MAX_CLUE_FAMILY_FRACTION: 0.4,
+  MIN_CLUE_FAMILIES: 4,
   // Las pistas de distancia se conservan, pero son una excepción deliberada y no
   // la forma habitual de describir el barrio.
   CLUE_FAMILY_WEIGHTS: {
     direction: 1,
     street: 0.9,
     distance: 0.03,
+    size: 1,
+    orientation: 0.9,
+    frontage: 0.85,
+    relative: 0.9,
+    streetOrientation: 0.8,
+    space: 0.65,
+    compound: 0.4,
   },
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,

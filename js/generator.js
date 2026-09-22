@@ -1,7 +1,7 @@
 import { CONFIG } from './config.js';
 import { createRng } from './rng.js';
 import { generateMap, validateStreetTopology } from './map.js';
-import { enumerateClueOptions, evaluateClue, cloneClue } from './clues.js';
+import { enumerateClueOptions, evaluateClue, cloneClue, clueFamily, validateClueReference } from './clues.js';
 import { getConsistentCandidates, isUniqueSolution, findMinimumSolvingSubsets, calculateDifficulty } from './solver.js';
 
 export function getLevelProfile(levelNumber = 1) {
@@ -25,12 +25,6 @@ function singleObservationCandidates(level, speakerId, clue) {
   return getConsistentCandidates(level, [{ houseId: speakerId, clue }]);
 }
 
-function clueFamily(clue) {
-  if (clue.type === 'withinDistance' || clue.type === 'fartherThan') return 'distance';
-  if (clue.type === 'direction') return 'direction';
-  return 'street';
-}
-
 function maxCluesForFamily(level, family) {
   if (family === 'distance') {
     return level.map.houses.length <= 10
@@ -38,7 +32,8 @@ function maxCluesForFamily(level, family) {
       : CONFIG.DISTANCE_CLUE_MAX_LARGE_LEVEL;
   }
   // Evita que una sola clase monopolice una seed, aun cuando sea la más común.
-  return Math.ceil(level.map.houses.length * 0.6);
+  if(family==='compound') return 2;
+  return Math.floor(level.map.houses.length * CONFIG.MAX_CLUE_FAMILY_FRACTION);
 }
 
 function weightedPick(rng, options) {
@@ -54,7 +49,7 @@ function weightedPick(rng, options) {
 function chooseClues(level, rng) {
   const usedTexts = new Set();
   const usedLogic = new Set();
-  const familyCounts = { direction: 0, street: 0, distance: 0 };
+  const familyCounts = Object.fromEntries(Object.keys(CONFIG.CLUE_FAMILY_WEIGHTS).map(f=>[f,0]));
   const houses = rng.shuffle(level.map.houses);
 
   for (const house of houses) {
@@ -63,7 +58,7 @@ function chooseClues(level, rng) {
       .filter((clue) => evaluateClue(level, clue, level.murdererId) === shouldBeTrue)
       .map((clue) => ({ clue, candidates: singleObservationCandidates(level, house.id, clue) }))
       .filter(({ candidates }) => candidates.includes(level.murdererId))
-      .filter(({ candidates }) => candidates.length >= CONFIG.MIN_STANDALONE_CANDIDATES && candidates.length < level.map.houses.length);
+      .filter(({ candidates }) => candidates.length >= CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE && candidates.length < level.map.houses.length);
 
     const target = level.map.houses.length * (level.profile.clueCandidateFraction || 0.5);
     const eligible = [];
@@ -84,10 +79,15 @@ function chooseClues(level, rng) {
         family,
         // Repetir una relación sigue siendo posible (la redundancia es válida),
         // pero con una penalización clara en lugar de bloquear la generación.
-        weight: (familyWeight / repetitionPenalty) * Math.exp(-quality * 1.15) * (usedLogic.has(logicKey) ? 0.35 : 1),
+        weight: (familyWeight / repetitionPenalty) * Math.exp(-quality * 1.15) * (usedLogic.has(logicKey) ? 0.35 : 1) * (level.levelNumber<=3 && option.candidates.length===2 ? 0.12 : 1),
       });
     }
     if (!eligible.length) return false;
+    // Family probability must not increase just because it has more wordings,
+    // reference streets or parameter combinations.
+    const availableCounts = {};
+    for(const o of eligible) availableCounts[o.family]=(availableCounts[o.family]||0)+1;
+    for(const o of eligible) o.weight/=availableCounts[o.family];
     const picked = weightedPick(rng, eligible);
     house.clue = cloneClue(picked.clue);
     familyCounts[picked.family] += 1;
@@ -139,17 +139,22 @@ function validateLevel(level) {
   const observations = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
   if (!isUniqueSolution(level, observations, level.murdererId)) return { valid: false, reason: 'ambiguous' };
   for (const house of level.map.houses) {
+    if(!validateClueReference(level,house.clue)) return {valid:false,reason:'invalid_reference'};
     const truth = evaluateClue(level, house.clue, level.murdererId);
     if (house.id === level.murdererId && truth) return { valid: false, reason: 'murderer_truth' };
     if (house.id !== level.murdererId && !truth) return { valid: false, reason: 'innocent_lie' };
     const singleton = singleObservationCandidates(level, house.id, house.clue);
     if (singleton.length === level.map.houses.length) return { valid: false, reason: 'empty_clue' };
-    if (singleton.length < CONFIG.MIN_STANDALONE_CANDIDATES) return { valid: false, reason: 'single_clue_unique' };
+    if (singleton.length < CONFIG.MIN_CANDIDATES_AFTER_SINGLE_CLUE) return { valid: false, reason: 'single_clue_unique' };
   }
   const texts = level.map.houses.map((h) => h.clue.text);
   if (new Set(texts).size !== texts.length) return { valid: false, reason: 'duplicate_text' };
   const distanceClues = level.map.houses.filter((h) => clueFamily(h.clue) === 'distance').length;
   if (distanceClues > maxCluesForFamily(level, 'distance')) return { valid: false, reason: 'distance_overrepresented' };
+  const counts={};
+  for(const h of level.map.houses) {const f=clueFamily(h.clue);counts[f]=(counts[f]||0)+1;}
+  if(Object.keys(counts).length<CONFIG.MIN_CLUE_FAMILIES || Object.entries(counts).some(([f,n])=>n>maxCluesForFamily(level,f))) return {valid:false,reason:'family_diversity'};
+  if(new Set(level.map.houses.map(h=>h.area)).size<2) return {valid:false,reason:'house_size_diversity'};
   const min = findMinimumSolvingSubsets(level).minimum;
   if (!Number.isFinite(min)) return { valid: false, reason: 'unsolved' };
   if (min < level.profile.minQuestions || min > level.profile.maxQuestions) return { valid: false, reason: 'difficulty' };
@@ -179,6 +184,7 @@ export function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
     if (!verdict.valid) { lastReason = verdict.reason; continue; }
   level.metrics = calculateDifficulty(level);
     level.metrics.clueFamilyCounts = { ...level.clueFamilyCounts };
+    level.metrics.clueFamilyDistribution = { ...level.clueFamilyCounts };
     return level;
   }
   throw new Error(`No se pudo generar un nivel válido para seed ${seed}, nivel ${profile.levelNumber}. Último motivo: ${lastReason}`);

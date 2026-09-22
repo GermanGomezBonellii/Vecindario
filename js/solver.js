@@ -1,4 +1,4 @@
-import { evaluateClue } from './clues.js';
+import { evaluateClue, clueFamily } from './clues.js';
 
 export function isCandidateConsistent(level, candidateId, observations) {
   for (const observation of observations) {
@@ -33,9 +33,13 @@ function combinations(items, k, start = 0, prefix = [], out = []) {
 
 export function findMinimumSolvingSubsets(level) {
   const allObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
+  // Cache each predicate's truth mask once; subset search only intersects masks.
+  const masks=allObs.map(o=>level.map.houses.reduce((mask,h,i)=>isCandidateConsistent(level,h.id,[o])?mask|(1<<i):mask,0));
+  const target=1<<level.map.houses.findIndex(h=>h.id===level.murdererId);
+  const indices=allObs.map((_,i)=>i);
   for (let k = 1; k <= allObs.length; k += 1) {
-    const subsets = combinations(allObs, k);
-    const solving = subsets.filter((subset) => isUniqueSolution(level, subset, level.murdererId));
+    const subsets = combinations(indices, k);
+    const solving = subsets.filter(subset=>subset.reduce((mask,i)=>mask&masks[i],(1<<allObs.length)-1)===target).map(subset=>subset.map(i=>allObs[i]));
     if (solving.length) return { minimum: k, subsets: solving };
   }
   return { minimum: Infinity, subsets: [] };
@@ -68,7 +72,12 @@ export function calculateDifficulty(level) {
     getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]),
   ]));
   const minimumSolvingHouseSets = minimum.subsets.map((subset) => subset.map((observation) => observation.houseId));
+  const familiesInMinimum = minimum.subsets.map(subset=>new Set(subset.flatMap(o=>o.clue.params.parts?o.clue.params.parts.map(clueFamily):[clueFamily(o.clue)])).size);
   return {
+    minimumSolutionFamilyRange: [Math.min(...familiesInMinimum),Math.max(...familiesInMinimum)],
+    compoundClueCount: level.map.houses.filter(h=>['AND','OR'].includes(h.clue.type)).length,
+    averagePredicateComplexity: level.map.houses.reduce((n,h)=>n+(h.clue.params.parts?3:1),0)/level.map.houses.length,
+    houseAreas: [...new Set(level.map.houses.map(h=>h.area))].sort((a,b)=>a-b),
     houseCount: level.map.houses.length,
     initialCandidates: level.map.houses.length,
     finalCandidates: getConsistentCandidates(level, fullObs).length,

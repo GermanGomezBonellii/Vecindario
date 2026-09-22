@@ -1,5 +1,5 @@
 import { getStreetSegments, phaseForHour } from './map.js';
-import { evaluateClue } from './clues.js';
+import { evaluateClue, clueFamily, CLUE_FAMILY_LABELS } from './clues.js';
 import { getConsistentCandidates } from './solver.js';
 import { CONFIG } from './config.js';
 
@@ -92,6 +92,12 @@ export class UI {
     }
     defs.appendChild(neighborhoodClip);
     lotsGroup.setAttribute('clip-path', 'url(#neighborhood-grid-clip)');
+    // Remove internal lot lines from occupied rectangles, keeping houses whole.
+    const mask=svgEl('mask',{id:'occupied-grid-mask',maskUnits:'userSpaceOnUse',x:0,y:0,width:level.map.width,height:level.map.height});
+    mask.appendChild(svgEl('rect',{x:0,y:0,width:level.map.width,height:level.map.height,fill:'white'}));
+    for(const h of level.map.houses) mask.appendChild(svgEl('rect',{...h.rect,fill:'black'}));
+    defs.appendChild(mask);
+    lotsGroup.setAttribute('mask','url(#occupied-grid-mask)');
     const map = level.map;
     const step = map.cellSize;
     // Complete underlying lattice, clipped to existing urban blocks.
@@ -329,7 +335,9 @@ export class UI {
       const standalone = metrics.standaloneCandidatesByHouse?.[h.id] || [];
       const truth = h.id === level.murdererId ? 'MENTIRA' : 'VERDAD';
       const asked = h.asked ? ' · interrogada' : '';
-      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · ${truth}`;
+      const inMinimum=minSets.some(set=>set.includes(h.id));
+      const actual=evaluateClue(level,h.clue,level.murdererId);
+      return `${h.id}${h.id === level.murdererId ? ' ★ ASESINO' : ''}${asked}\n  “${h.clue.text}”\n  ${h.clue.type} · familia ${clueFamily(h.clue)}\n  predicado ${h.clue.type}(${JSON.stringify(h.clue.params)})\n  ${actual?'TRUE':'FALSE'} · ${truth} · en conjunto mínimo: ${inMinimum?'sí':'no'}\n  casa ${h.widthInCells}×${h.heightInCells} · área ${h.area} · frentes ${h.frontageCount}\n  sola deja ${standalone.length}/${metrics.houseCount} candidatos: ${standalone.join(', ')} · reduce ${metrics.informationByHouse[h.id]} · información ${Math.log2(metrics.houseCount/standalone.length).toFixed(2)} bits`;
     });
     const lines = [
       `SEED  ${level.seed}`,
@@ -341,7 +349,10 @@ export class UI {
       `REGLA “1 PISTA NO RESUELVE”  ${singleRulePass ? 'OK' : 'ERROR'}${singleRulePass ? '' : ` (${metrics.singleClueUniqueCount} pista/s inequívoca/s)`}`,
       `REDUCCIÓN MEDIA POR 1 PISTA  ${metrics.averageCandidateReduction}`,
       `REDUNDANCIA  ${metrics.redundancyScore}`,
-      `FAMILIAS DE PISTAS  dirección ${metrics.clueFamilyCounts?.direction || 0} · calle ${metrics.clueFamilyCounts?.street || 0} · distancia ${metrics.clueFamilyCounts?.distance || 0}`,
+      `DISTRIBUCIÓN DE FAMILIAS\n${Object.entries(metrics.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>`  ${CLUE_FAMILY_LABELS[f]||f}: ${n}`).join('\n')}`,
+      `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
+      `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
+      `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
       `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
       `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
       '',
