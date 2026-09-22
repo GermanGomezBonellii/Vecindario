@@ -177,9 +177,20 @@ function sideStreetKey(block, side) {
   return vStreetKey(block.c + 1);
 }
 
+import { getHouseSizeDistribution } from './config.js';
+
 export const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
-export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0 } = {}) {
+export function houseSizeCounts(houses) {
+  return Object.fromEntries([1,2,3,4].map(area=>[area,houses.filter(h=>h.area===area).length]));
+}
+
+export function validHouseSizeDistribution(houses, level) {
+  const c=houseSizeCounts(houses), p=getHouseSizeDistribution(level);
+  return c[1]>houses.length/2 && c[2]<=p.maxTwo && c[3]<=p.maxThree && c[4]<=p.maxFour;
+}
+
+export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0, levelNumber = 1 } = {}) {
   const { x, y, cellSize } = makeSquareAxes(rng, cols, rows);
   const allBlocks = createBlockDefinitions(x, y, cols, rows);
   const blocks = selectExistingBlocks(rng, allBlocks, cols, rows, missingBlocks);
@@ -218,8 +229,17 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
 
   const viableBlocks = blocks.filter((block) => block.enabledSides.length > 0);
   const selectedBlocks = rng.shuffle(viableBlocks).slice(0, Math.min(houseCount, viableBlocks.length));
+  const policy=getHouseSizeDistribution(levelNumber), counts=[0,0,0,0,0];
+  const caps=[0,Infinity,policy.maxTwo,rng()<policy.threeChance?policy.maxThree:0,rng()<policy.fourChance?policy.maxFour:0];
+  const maxSpecial=Math.floor((selectedBlocks.length-1)/2);
   const houses = selectedBlocks.map((block, i) => {
-    const [widthInCells, heightInCells] = rng.pick(HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows));
+    const special=counts[2]+counts[3]+counts[4];
+    const shapes=HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows && (w*h===1 || (special<maxSpecial && counts[w*h]<caps[w*h])));
+    const areas=[...new Set(shapes.map(([w,h])=>w*h))];
+    let roll=rng()*areas.reduce((sum,a)=>sum+policy.weights[a],0);
+    const area=areas.find(a=>(roll-=policy.weights[a])<=0) || 1;
+    counts[area]++;
+    const [widthInCells, heightInCells] = rng.pick(shapes.filter(([w,h])=>w*h===area));
     const sidesForLot = (lot) => {
       const col = lot % block.lotCols, row = Math.floor(lot / block.lotCols);
       return [row === 0 && 'top', row+heightInCells === block.lotRows && 'bottom', col === 0 && 'left', col+widthInCells === block.lotCols && 'right'].filter(Boolean);

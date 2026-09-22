@@ -2,6 +2,8 @@ import { getStreetSegments, phaseForHour } from './map.js';
 import { evaluateClue, clueFamily, CLUE_FAMILY_LABELS } from './clues.js';
 import { getConsistentCandidates } from './solver.js';
 import { CONFIG } from './config.js';
+import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
+import { houseSizeCounts } from './map.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs = {}) {
@@ -353,6 +355,10 @@ export class UI {
       `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
       `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
       `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
+      `TAMAÑOS\n${Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>`  ${a} lote(s): ${n}`).join('\n')}`,
+      `PROPIEDADES GEOMÉTRICAS\n${Object.entries(geometricPropertyCounts(level.map.houses)).map(([label,n])=>`  ${label}: ${n}${n===1?' · ÚNICA':''}`).join('\n')}`,
+      `PROPIEDADES ÚNICAS: ${Object.entries(geometricPropertyCounts(level.map.houses)).filter(([,n])=>n===1).map(([label])=>label).join(', ') || 'ninguna'}`,
+      `ALERTAS VISUALES: ${level.map.houses.flatMap(h=>visualClueWarnings(level,h.clue).map(w=>`${h.id}: ${w}`)).join('; ') || 'ninguna — pistas de tamaño/forma conservadoras'}`,
       `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
       `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
       '',

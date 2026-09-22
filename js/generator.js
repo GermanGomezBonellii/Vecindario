@@ -1,6 +1,7 @@
 import { CONFIG } from './config.js';
 import { createRng } from './rng.js';
-import { generateMap, validateStreetTopology } from './map.js';
+import { generateMap, validateStreetTopology, validHouseSizeDistribution, houseSizeCounts } from './map.js';
+import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { enumerateClueOptions, evaluateClue, cloneClue, clueFamily, validateClueReference } from './clues.js';
 import { getConsistentCandidates, isUniqueSolution, findMinimumSolvingSubsets, calculateDifficulty } from './solver.js';
 
@@ -55,6 +56,7 @@ function chooseClues(level, rng) {
   for (const house of houses) {
     const shouldBeTrue = house.id !== level.murdererId;
     let options = enumerateClueOptions(level, house.id)
+      .filter(clue => visualClueWarnings(level,clue).length===0)
       .filter((clue) => evaluateClue(level, clue, level.murdererId) === shouldBeTrue)
       .map((clue) => ({ clue, candidates: singleObservationCandidates(level, house.id, clue) }))
       .filter(({ candidates }) => candidates.includes(level.murdererId))
@@ -136,10 +138,12 @@ function timedStrategyExists(level) {
 function validateLevel(level) {
   const topology = validateStreetTopology(level.map);
   if (!topology.valid) return { valid: false, reason: topology.reason };
+  if (!validHouseSizeDistribution(level.map.houses,level.levelNumber)) return {valid:false,reason:'house_size_progression'};
   const observations = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
   if (!isUniqueSolution(level, observations, level.murdererId)) return { valid: false, reason: 'ambiguous' };
   for (const house of level.map.houses) {
     if(!validateClueReference(level,house.clue)) return {valid:false,reason:'invalid_reference'};
+    if(visualClueWarnings(level,house.clue).length) return {valid:false,reason:'revealing_visual_clue'};
     const truth = evaluateClue(level, house.clue, level.murdererId);
     if (house.id === level.murdererId && truth) return { valid: false, reason: 'murderer_truth' };
     if (house.id !== level.murdererId && !truth) return { valid: false, reason: 'innocent_lie' };
@@ -154,7 +158,6 @@ function validateLevel(level) {
   const counts={};
   for(const h of level.map.houses) {const f=clueFamily(h.clue);counts[f]=(counts[f]||0)+1;}
   if(Object.keys(counts).length<CONFIG.MIN_CLUE_FAMILIES || Object.entries(counts).some(([f,n])=>n>maxCluesForFamily(level,f))) return {valid:false,reason:'family_diversity'};
-  if(new Set(level.map.houses.map(h=>h.area)).size<2) return {valid:false,reason:'house_size_diversity'};
   const min = findMinimumSolvingSubsets(level).minimum;
   if (!Number.isFinite(min)) return { valid: false, reason: 'unsolved' };
   if (min < level.profile.minQuestions || min > level.profile.maxQuestions) return { valid: false, reason: 'difficulty' };
@@ -172,7 +175,7 @@ export function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
       levelNumber: profile.levelNumber,
       profile,
       timed,
-      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks }),
+      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks, levelNumber: profile.levelNumber }),
       murdererId: null,
       startHour: CONFIG.START_HOUR,
       generationAttempt: attempt + 1,
@@ -185,6 +188,8 @@ export function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
   level.metrics = calculateDifficulty(level);
     level.metrics.clueFamilyCounts = { ...level.clueFamilyCounts };
     level.metrics.clueFamilyDistribution = { ...level.clueFamilyCounts };
+    level.metrics.houseSizeDistribution = houseSizeCounts(level.map.houses);
+    level.metrics.geometricProperties = geometricPropertyCounts(level.map.houses);
     return level;
   }
   throw new Error(`No se pudo generar un nivel válido para seed ${seed}, nivel ${profile.levelNumber}. Último motivo: ${lastReason}`);

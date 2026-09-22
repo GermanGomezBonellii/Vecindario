@@ -37,7 +37,10 @@ Las referencias de lado/franja sólo se generan con calles activas continuas a l
 - Al menos cuatro familias por partida y como máximo el 40% de testimonios de una familia (redondeado hacia abajo).
 - Máximo una pista de distancia; máximo dos compuestas.
 - El peso de una familia se normaliza por sus opciones disponibles: no gana frecuencia por tener más redacciones o referencias posibles.
-- Las casas deben tener al menos dos áreas diferentes en cada partida aceptada.
+- La mayoría estricta de casas es siempre 1×1. Ya no se fuerza variedad de áreas: una partida inicial puede tener todas sus casas de un lote.
+- `getHouseSizeDistribution(level)` centraliza pesos por área, límites y probabilidad de habilitar tamaños raros. Niveles 1–2: máximo una de dos lotes, ninguna mayor. Niveles 3–4: máximo dos de dos lotes y ocasionalmente una de tres, ninguna de cuatro. Niveles 5–7: máximo una de tres y una de cuatro, esta última rara. Desde nivel 8: aumentan gradualmente los pesos, manteniendo mayoría 1×1 y máximo dos de tres y una de cuatro. Las orientaciones que caben se sortean dentro del área elegida.
+- Las pistas de tamaño/forma se rechazan si su predicado o su complemento describe menos de dos casas. La regla también revisa cada componente de AND/OR y se vuelve a comprobar al aceptar la seed. Una propiedad única puede existir pero no señalarse con esas pistas.
+- El panel incluye conteos por área, propiedades geométricas únicas y alertas de pistas visuales reveladoras.
 - El panel muestra distribución, tipo, parámetros, resultado booleano real, candidatos individuales, reducción, información en bits y pertenencia a conjuntos mínimos. También muestra rango de familias usadas en soluciones mínimas, complejidad media (simple=1, compuesta=3), áreas y topología. Son métricas descriptivas; no se presenta un puntaje psicológico de dificultad.
 
 ## Familias pendientes deliberadamente
@@ -49,6 +52,8 @@ No se generan todavía proximidad a T, calle sin salida, periferia/interior ni c
 ## Verificación
 
 `node build.cjs` regenera el ejecutable que usa index.html.
+
+`node verify-size-progression.cjs` prueba 220 partidas en 11 niveles (incluido modo horario), límites estrictos, mayoría 1×1, verdad/mentira, determinismo y bloqueo de propiedades únicas y sus complementos, incluso en compuestas.
 
 `node verify-testimonies.cjs` verifica predicados con casos construidos y tablas booleanas, genera 210 partidas (niveles 1, 2, 3, 5, 8, 12 y 20, incluidas 21 con horario), contrasta frentes con geometría independiente, áreas, espacio libre, no trivialidad, referencias, diversidad, determinismo y todas las formas permitidas. Guarda el resultado en `testimony-validation.json`.
 

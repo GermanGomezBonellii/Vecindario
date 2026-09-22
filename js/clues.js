@@ -128,6 +128,24 @@ export function clueFamily(clue) {
   return CLUE_TYPES[clue.type]?.family || 'street';
 }
 
+export function visualClueWarnings(level, clue) {
+  if (['AND','OR'].includes(clue.type)) return clue.params.parts.flatMap(p=>visualClueWarnings(level,p));
+  if (!['size','orientation'].includes(clueFamily(clue))) return [];
+  const yes=level.map.houses.filter(h=>evaluateClue(level,clue,h.id)).length;
+  const minority=Math.min(yes,level.map.houses.length-yes);
+  return minority<2 ? [`${clue.type}: propiedad visual ${minority===1?'única':'sin contraste'} (${yes}/${level.map.houses.length})`] : [];
+}
+
+export function geometricPropertyCounts(houses) {
+  return Object.fromEntries([
+    ['horizontal larga',h=>h.isHorizontal && h.isElongated],
+    ['vertical larga',h=>h.isVertical && h.isElongated],
+    ['cuadrada',h=>h.isSquare], ['alargada',h=>h.isElongated],
+    ['más de un lote',h=>h.area>1],
+    ...[1,2,3,4].map(a=>[`${a} lote(s)`,h=>h.area===a]),
+  ].map(([label,predicate])=>[label,houses.filter(predicate).length]));
+}
+
 export const CLUE_FAMILY_LABELS = {direction:'Dirección',distance:'Distancia',street:'Calle',size:'Tamaño',orientation:'Forma',frontage:'Frentes',relative:'Posición respecto de calles',streetOrientation:'Orientación de calles',space:'Espacio libre',compound:'Compuesta',topology:'Recorrido'};
 
 export function validateClueReference(level,clue) {

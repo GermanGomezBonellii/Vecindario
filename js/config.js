@@ -1,3 +1,12 @@
+// Weights are per area, independent of the number of possible orientations.
+export function getHouseSizeDistribution(level = 1) {
+  if (level <= 2) return { weights: [0,.90,.10,0,0], maxTwo: 1, maxThree: 0, maxFour: 0, threeChance: 0, fourChance: 0 };
+  if (level <= 4) return { weights: [0,.75,.22,.03,0], maxTwo: 2, maxThree: 1, maxFour: 0, threeChance: .08, fourChance: 0 };
+  if (level <= 7) return { weights: [0,.65,.25,.08,.02], maxTwo: Infinity, maxThree: 1, maxFour: 1, threeChance: 1, fourChance: .12 };
+  const p = Math.min(1, (level-8)/6);
+  return { weights: [0,.60-.05*p,.28,.09+.03*p,.03+.02*p], maxTwo: Infinity, maxThree: 2, maxFour: 1, threeChance: 1, fourChance: .35+.25*p };
+}
+
 export const CONFIG = {
   GAME_NAME: 'Vecindario',
   BASE_SCORE: 3000,

@@ -2,6 +2,15 @@
 (() => {
 'use strict';
 // ---- config.js ----
+// Weights are per area, independent of the number of possible orientations.
+function getHouseSizeDistribution(level = 1) {
+  if (level <= 2) return { weights: [0,.90,.10,0,0], maxTwo: 1, maxThree: 0, maxFour: 0, threeChance: 0, fourChance: 0 };
+  if (level <= 4) return { weights: [0,.75,.22,.03,0], maxTwo: 2, maxThree: 1, maxFour: 0, threeChance: .08, fourChance: 0 };
+  if (level <= 7) return { weights: [0,.65,.25,.08,.02], maxTwo: Infinity, maxThree: 1, maxFour: 1, threeChance: 1, fourChance: .12 };
+  const p = Math.min(1, (level-8)/6);
+  return { weights: [0,.60-.05*p,.28,.09+.03*p,.03+.02*p], maxTwo: Infinity, maxThree: 2, maxFour: 1, threeChance: 1, fourChance: .35+.25*p };
+}
+
 const CONFIG = {
   GAME_NAME: 'Vecindario',
   BASE_SCORE: 3000,
@@ -253,9 +262,19 @@ function sideStreetKey(block, side) {
   return vStreetKey(block.c + 1);
 }
 
+
 const HOUSE_SHAPES = [[1,1],[1,2],[2,1],[1,3],[3,1],[1,4],[4,1],[2,2]];
 
-function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0 } = {}) {
+function houseSizeCounts(houses) {
+  return Object.fromEntries([1,2,3,4].map(area=>[area,houses.filter(h=>h.area===area).length]));
+}
+
+function validHouseSizeDistribution(houses, level) {
+  const c=houseSizeCounts(houses), p=getHouseSizeDistribution(level);
+  return c[1]>houses.length/2 && c[2]<=p.maxTwo && c[3]<=p.maxThree && c[4]<=p.maxFour;
+}
+
+function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0, levelNumber = 1 } = {}) {
   const { x, y, cellSize } = makeSquareAxes(rng, cols, rows);
   const allBlocks = createBlockDefinitions(x, y, cols, rows);
   const blocks = selectExistingBlocks(rng, allBlocks, cols, rows, missingBlocks);
@@ -294,8 +313,17 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
 
   const viableBlocks = blocks.filter((block) => block.enabledSides.length > 0);
   const selectedBlocks = rng.shuffle(viableBlocks).slice(0, Math.min(houseCount, viableBlocks.length));
+  const policy=getHouseSizeDistribution(levelNumber), counts=[0,0,0,0,0];
+  const caps=[0,Infinity,policy.maxTwo,rng()<policy.threeChance?policy.maxThree:0,rng()<policy.fourChance?policy.maxFour:0];
+  const maxSpecial=Math.floor((selectedBlocks.length-1)/2);
   const houses = selectedBlocks.map((block, i) => {
-    const [widthInCells, heightInCells] = rng.pick(HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows));
+    const special=counts[2]+counts[3]+counts[4];
+    const shapes=HOUSE_SHAPES.filter(([w,h])=>w<=block.lotCols && h<=block.lotRows && (w*h===1 || (special<maxSpecial && counts[w*h]<caps[w*h])));
+    const areas=[...new Set(shapes.map(([w,h])=>w*h))];
+    let roll=rng()*areas.reduce((sum,a)=>sum+policy.weights[a],0);
+    const area=areas.find(a=>(roll-=policy.weights[a])<=0) || 1;
+    counts[area]++;
+    const [widthInCells, heightInCells] = rng.pick(shapes.filter(([w,h])=>w*h===area));
     const sidesForLot = (lot) => {
       const col = lot % block.lotCols, row = Math.floor(lot / block.lotCols);
       return [row === 0 && 'top', row+heightInCells === block.lotRows && 'bottom', col === 0 && 'left', col+widthInCells === block.lotCols && 'right'].filter(Boolean);
@@ -516,6 +544,24 @@ function clueFamily(clue) {
   if(['withinDistance','fartherThan'].includes(clue.type)) return 'distance';
   if(clue.type==='direction') return 'direction';
   return CLUE_TYPES[clue.type]?.family || 'street';
+}
+
+function visualClueWarnings(level, clue) {
+  if (['AND','OR'].includes(clue.type)) return clue.params.parts.flatMap(p=>visualClueWarnings(level,p));
+  if (!['size','orientation'].includes(clueFamily(clue))) return [];
+  const yes=level.map.houses.filter(h=>evaluateClue(level,clue,h.id)).length;
+  const minority=Math.min(yes,level.map.houses.length-yes);
+  return minority<2 ? [`${clue.type}: propiedad visual ${minority===1?'única':'sin contraste'} (${yes}/${level.map.houses.length})`] : [];
+}
+
+function geometricPropertyCounts(houses) {
+  return Object.fromEntries([
+    ['horizontal larga',h=>h.isHorizontal && h.isElongated],
+    ['vertical larga',h=>h.isVertical && h.isElongated],
+    ['cuadrada',h=>h.isSquare], ['alargada',h=>h.isElongated],
+    ['más de un lote',h=>h.area>1],
+    ...[1,2,3,4].map(a=>[`${a} lote(s)`,h=>h.area===a]),
+  ].map(([label,predicate])=>[label,houses.filter(predicate).length]));
 }
 
 const CLUE_FAMILY_LABELS = {direction:'Dirección',distance:'Distancia',street:'Calle',size:'Tamaño',orientation:'Forma',frontage:'Frentes',relative:'Posición respecto de calles',streetOrientation:'Orientación de calles',space:'Espacio libre',compound:'Compuesta',topology:'Recorrido'};
@@ -808,6 +854,7 @@ function chooseClues(level, rng) {
   for (const house of houses) {
     const shouldBeTrue = house.id !== level.murdererId;
     let options = enumerateClueOptions(level, house.id)
+      .filter(clue => visualClueWarnings(level,clue).length===0)
       .filter((clue) => evaluateClue(level, clue, level.murdererId) === shouldBeTrue)
       .map((clue) => ({ clue, candidates: singleObservationCandidates(level, house.id, clue) }))
       .filter(({ candidates }) => candidates.includes(level.murdererId))
@@ -889,10 +936,12 @@ function timedStrategyExists(level) {
 function validateLevel(level) {
   const topology = validateStreetTopology(level.map);
   if (!topology.valid) return { valid: false, reason: topology.reason };
+  if (!validHouseSizeDistribution(level.map.houses,level.levelNumber)) return {valid:false,reason:'house_size_progression'};
   const observations = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
   if (!isUniqueSolution(level, observations, level.murdererId)) return { valid: false, reason: 'ambiguous' };
   for (const house of level.map.houses) {
     if(!validateClueReference(level,house.clue)) return {valid:false,reason:'invalid_reference'};
+    if(visualClueWarnings(level,house.clue).length) return {valid:false,reason:'revealing_visual_clue'};
     const truth = evaluateClue(level, house.clue, level.murdererId);
     if (house.id === level.murdererId && truth) return { valid: false, reason: 'murderer_truth' };
     if (house.id !== level.murdererId && !truth) return { valid: false, reason: 'innocent_lie' };
@@ -907,7 +956,6 @@ function validateLevel(level) {
   const counts={};
   for(const h of level.map.houses) {const f=clueFamily(h.clue);counts[f]=(counts[f]||0)+1;}
   if(Object.keys(counts).length<CONFIG.MIN_CLUE_FAMILIES || Object.entries(counts).some(([f,n])=>n>maxCluesForFamily(level,f))) return {valid:false,reason:'family_diversity'};
-  if(new Set(level.map.houses.map(h=>h.area)).size<2) return {valid:false,reason:'house_size_diversity'};
   const min = findMinimumSolvingSubsets(level).minimum;
   if (!Number.isFinite(min)) return { valid: false, reason: 'unsolved' };
   if (min < level.profile.minQuestions || min > level.profile.maxQuestions) return { valid: false, reason: 'difficulty' };
@@ -925,7 +973,7 @@ function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
       levelNumber: profile.levelNumber,
       profile,
       timed,
-      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks }),
+      map: generateMap(rng, { cols: profile.cols, rows: profile.rows, houseCount: profile.houseCount, streetBreaks: profile.streetBreaks, missingBlocks: profile.missingBlocks, levelNumber: profile.levelNumber }),
       murdererId: null,
       startHour: CONFIG.START_HOUR,
       generationAttempt: attempt + 1,
@@ -938,6 +986,8 @@ function generateLevel(seed, { timed = false, levelNumber = 1 } = {}) {
   level.metrics = calculateDifficulty(level);
     level.metrics.clueFamilyCounts = { ...level.clueFamilyCounts };
     level.metrics.clueFamilyDistribution = { ...level.clueFamilyCounts };
+    level.metrics.houseSizeDistribution = houseSizeCounts(level.map.houses);
+    level.metrics.geometricProperties = geometricPropertyCounts(level.map.houses);
     return level;
   }
   throw new Error(`No se pudo generar un nivel válido para seed ${seed}, nivel ${profile.levelNumber}. Último motivo: ${lastReason}`);
@@ -1627,6 +1677,10 @@ class UI {
       `FAMILIAS EN SOLUCIONES MÍNIMAS  ${(metrics.minimumSolutionFamilyRange||[]).join('–')}`,
       `COMPUESTAS  ${metrics.compoundClueCount||0} · complejidad media ${metrics.averagePredicateComplexity?.toFixed(2)}`,
       `ÁREAS DE CASAS  ${(metrics.houseAreas||[]).join(', ')}`,
+      `TAMAÑOS\n${Object.entries(houseSizeCounts(level.map.houses)).map(([a,n])=>`  ${a} lote(s): ${n}`).join('\n')}`,
+      `PROPIEDADES GEOMÉTRICAS\n${Object.entries(geometricPropertyCounts(level.map.houses)).map(([label,n])=>`  ${label}: ${n}${n===1?' · ÚNICA':''}`).join('\n')}`,
+      `PROPIEDADES ÚNICAS: ${Object.entries(geometricPropertyCounts(level.map.houses)).filter(([,n])=>n===1).map(([label])=>label).join(', ') || 'ninguna'}`,
+      `ALERTAS VISUALES: ${level.map.houses.flatMap(h=>visualClueWarnings(level,h.clue).map(w=>`${h.id}: ${w}`)).join('; ') || 'ninguna — pistas de tamaño/forma conservadoras'}`,
       `TRAMOS DE CALLE INTERRUMPIDOS  ${level.map.removedStreetSegments || 0}`,
       `TRAMA  ${level.map.cols}×${level.map.rows} · manzanas ausentes ${level.map.missingBlocks || 0}`,
       '',
