@@ -5,7 +5,8 @@ import { bestHintHouse } from './solver.js';
 import { randomSeed, createRng } from './rng.js';
 import { phaseForHour, avenueStreet, coastGeometry, selectCoastSide } from './map.js';
 import { AudioManager } from './audio.js';
-import { UI } from './ui.js';
+import { UI, detectPlazas } from './ui.js';
+import { footballPlacements } from './football.js';
 import { runInternalTests } from './tests.js';
 import { dailyDateKey, dailyVersionFor, generateDailyLevel, dailyStartScore, replayDaily, readDailyRecord, writeDailyRecord, listDailyRecords, computeDailyStats } from './daily.js';
 import { onlineEnabled, OnlineClient } from './online.js';
@@ -44,6 +45,8 @@ const CAR_ID = 'car';
 const CAR_PREF = 'vecindario.style.car';
 const CAR_COUNT_KEY = 'vecindario.count.car';
 const PIER_COUNT_KEY = 'vecindario.count.pier';
+const FOOTBALL_COUNT_KEY = 'vecindario.count.football';
+const FOOTBALL_PREF = 'vecindario.style.football';
 
 function safeReadCount(key, max) {
   try { return Math.min(max, Math.max(0, Math.floor(Number(localStorage.getItem(key)) || 0))); } catch (_) { return 0; }
@@ -79,6 +82,8 @@ function safeClearUnlocks() {
     localStorage.removeItem(CAR_PREF);
     localStorage.removeItem(CAR_COUNT_KEY);
     localStorage.removeItem(PIER_COUNT_KEY);
+    localStorage.removeItem(FOOTBALL_COUNT_KEY);
+    localStorage.removeItem(FOOTBALL_PREF);
     localStorage.removeItem('vecindario-theme');
   } catch (_) { /* file:// can block storage */ }
 }
@@ -105,6 +110,8 @@ export class Game {
     this.carCount = this.carUnlocked ? Math.max(1, safeReadCount(CAR_COUNT_KEY, CONFIG.CAR_MAX)) : 0;
     this.pierCount = this.coastalUnlocked ? Math.max(1, safeReadCount(PIER_COUNT_KEY, CONFIG.PIER_MAX)) : 0;
     this.shopOpen=false;
+    this.footballCount = safeReadCount(FOOTBALL_COUNT_KEY, 2);
+    this.footballEnabled = this.footballCount > 0 && safeReadStyle(FOOTBALL_PREF);
     this.lastOutcomeWon = false;
     this.context = 'campaign';
     this.daily = null;
@@ -331,6 +338,8 @@ export class Game {
     level.carEnabled = Boolean(this.carEnabled);
     level.carCount = this.carCount;
     level.pierCount = this.pierCount;
+    level.footballPitches = this.footballEnabled
+      ? footballPlacements(level.map, detectPlazas(level.map, levelNumber), this.footballCount, `${seed}|${levelNumber}`) : [];
     return level;
   }
 
@@ -339,6 +348,13 @@ export class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.level = this.applyCosmetics(prepared || generateLevel(seed, { timed, levelNumber: this.levelNumber }), seed, this.levelNumber);
+    // Campaign-only bounded retries. Daily/prepared competitive geometry is immutable.
+    if (!this.isDaily && this.footballEnabled) {
+      for (let attempt=1; attempt<=2 && this.level.footballPitches.length<this.footballCount; attempt++) {
+        const candidate=this.applyCosmetics(generateLevel(`${seed}|football-layout:${attempt}`, {timed,levelNumber:this.levelNumber}),seed,this.levelNumber);
+        if(candidate.footballPitches.length>this.level.footballPitches.length) this.level=candidate;
+      }
+    }
     this.score ??= CONFIG.DEBUG ? CONFIG.DEBUG_SCORE : CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
@@ -623,6 +639,25 @@ export class Game {
   toggleCar() { return this.setCar(!this.carEnabled); }
 
   // --- Vista uniforme de las mejoras, para que la tienda no repita lógica ------
+  footballCost() { return this.footballCount ? 20000 : 10000; }
+  canBuyFootball() { return Boolean(this.shopOpen && this.canUseShop() && this.footballCount<2 && this.score>=this.footballCost()); }
+  buyFootball() {
+    if(!this.canBuyFootball()) return false;
+    this.score-=this.footballCost();
+    this.footballCount++;
+    this.footballEnabled=true;
+    safeSaveCount(FOOTBALL_COUNT_KEY,this.footballCount);
+    safeSaveStyle(FOOTBALL_PREF,true);
+    this.ui.refresh();
+    return true;
+  }
+  toggleFootball() {
+    if(!this.shopOpen || !this.canUseShop() || !this.footballCount) return false;
+    this.footballEnabled=!this.footballEnabled;
+    safeSaveStyle(FOOTBALL_PREF,this.footballEnabled);
+    this.ui.refresh();
+    return true;
+  }
   upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST }[id]; }
 
   isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked }[id]); }
@@ -670,6 +705,8 @@ export class Game {
     this.carEnabled = false;
     this.carCount = 0;
     this.pierCount = 0;
+    this.footballCount = 0;
+    this.footballEnabled = false;
     this.unlockedThemes = new Set(FREE_THEME_IDS);
     if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
     safeSaveTheme(this.theme);

@@ -21,8 +21,7 @@
   <div id="app" class="app" data-phase="day">
     <header class="topbar">
       <div class="brand-wrap">
-        <h1 class="brand" id="brand">VECINDARIO</h1>
-        <button id="menuBtn" class="menu-button" type="button" data-copy="labels.menu" data-copy-aria="aria.menu"></button>
+        <h1 class="brand"><button id="brand" class="brand-home" type="button" data-copy-aria="aria.menu" data-copy-title="aria.menu">VECINDARIO</button></h1>
         <span class="seed-label" id="seedLabel" hidden></span>
       </div>
       <div class="statusbar" data-copy-aria="aria.status">
@@ -95,11 +94,12 @@
       </aside>
     </main>
 
-    <div id="homeModal" class="modal-backdrop">
-      <section class="modal home-modal" role="dialog" aria-modal="true" aria-labelledby="homeTitle">
-        <span class="eyebrow" data-copy="home.eyebrow"></span>
-        <h2 id="homeTitle" data-copy="home.title"></h2>
-        <p data-copy="home.rule"></p>
+    <div id="homeModal" class="modal-backdrop home-backdrop">
+      <section class="modal home-modal home-screen" role="dialog" aria-modal="true" aria-labelledby="homeLede homeTitle">
+        <div class="home-body">
+          <p class="home-lede" id="homeLede" data-copy="home.lede"></p>
+          <h2 id="homeTitle" class="home-wordmark" data-copy="home.title"></h2>
+          <p class="home-rule" data-copy="home.rule"></p>
         <div class="home-options">
           <button id="homeDailyBtn" class="home-option home-daily" type="button">
             <span class="home-kicker" data-copy="home.daily"></span>
@@ -114,7 +114,8 @@
             <span class="home-help" data-copy="home.campaignHelp"></span>
           </button>
         </div>
-        <button id="homeStatsBtn" class="modal-secondary home-stats" type="button" data-copy="home.stats"></button>
+        <button id="homeStatsBtn" class="home-stats" type="button" data-copy="home.stats"></button>
+        </div>
       </section>
     </div>
 
@@ -194,6 +195,8 @@
           <span class="shop-section-help" data-copy="shop.stylesHelp"></span>
         </div>
         <div class="shop-upgrades" id="shopUpgrades"></div>
+        <div class="shop-section-head"><span class="eyebrow" data-copy="shop.publicSpaces"></span></div>
+        <div class="shop-upgrades" id="shopPublicSpaces"></div>
         <p id="shopStatus" aria-live="polite"></p>
         <p class="shop-credit" data-copy="shop.credit"></p>
         <div class="modal-actions stacked-mobile">

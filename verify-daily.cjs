@@ -2,7 +2,7 @@
 // de acciones, calificación, persistencia, independencia de la campaña, un solo
 // resultado oficial por día, estadísticas y paridad con el núcleo del servidor.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const files=['config','copy','clue-copy','rng','map','clues','solver','generator','daily','online','game'];
+const files=['config','copy','clue-copy','rng','map','clues','solver','generator','daily-v1','daily','online','game'];
 const source=files.map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 
 function makeStorage(){
@@ -118,7 +118,7 @@ console.log('PASS: dorado/verde/celeste/gris/rojo, ayudas, errores, aciertos sin
 
 // --- Partida diaria con persistencia ----------------------------------------
 storage.clear();
-const today=api.dailyDateKey(new Date());
+const today=api.dailyDateKey(clock);
 assert.equal(today,'2026-09-22');
 const g=new api.Game({seed:'campaign-seed',levelNumber:4});
 g.updateUrl=()=>{};

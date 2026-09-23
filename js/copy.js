@@ -23,6 +23,7 @@ export function applyCopy(root) {
   root.querySelectorAll('[data-copy-title]').forEach(el=>el.setAttribute('title',t(el.dataset.copyTitle)));
 }
 
+spanishCopy.navigation={reset:'Restablecer encuadre'};
 export const englishCopy = {
   intro:{level:n=>`LEVEL ${n}`,headline:"THERE'S A MURDERER IN THE NEIGHBORHOOD.",rule:'Everyone tells the truth. Except them.',title:'How do you want to investigate?',support:"Question the neighbors. Find the only one who's lying.",normal:'Pure logic',normalHelp:'No houses will be ruled out for you.',assist:'Assisted',assistHelp:'Impossible houses will fade out automatically.',start:'Start'},
   investigation:{entry:'Choose a house. Someone there knows something.',assist:'Choose a house. Contradictions will fade out.',select:'What do you want to do here?',asked:"You've already talked to this neighbor.",unavailable:'No one answers.',unavailableNight:'The lights are off. No one answers.',timed:'Each question takes an hour. Not every door will stay open.'},
@@ -79,8 +80,8 @@ spanishCopy.labels.daily='DIARIO';
 englishCopy.labels.daily='DAILY';
 spanishCopy.aria.menu='Volver al menú';
 englishCopy.aria.menu='Back to the menu';
-spanishCopy.home={eyebrow:'VECINDARIO',title:'Hay un asesino en el barrio.',rule:'Todos dicen la verdad. Menos él.',daily:'MISTERIO DIARIO',dailyHelp:'Un caso nuevo cada día. El mismo para todos.',campaign:'MODO CAMPAÑA',campaignHelp:'Barrios sin fin, cada vez más enredados.',campaignLevel:'Nivel {n}',campaignNew:'Nivel 1',campaignResume:'Seguir en el nivel {n}',stats:'MIS INVESTIGACIONES',next:'Próximo misterio en {time}',statusNew:'Sin investigar',statusPlaying:'Investigación en curso',statusWon:'Resuelto · {grade}',statusLost:'Sin resolver'};
-englishCopy.home={eyebrow:'VECINDARIO',title:"There's a murderer in the neighborhood.",rule:'Everyone tells the truth. Except them.',daily:'DAILY MYSTERY',dailyHelp:'A new case every day. The same for everyone.',campaign:'CAMPAIGN',campaignHelp:'Endless neighborhoods, each one more tangled.',campaignLevel:'Level {n}',campaignNew:'Level 1',campaignResume:'Continue at level {n}',stats:'MY INVESTIGATIONS',next:'Next mystery in {time}',statusNew:'Not investigated',statusPlaying:'Investigation in progress',statusWon:'Solved · {grade}',statusLost:'Unsolved'};
+spanishCopy.home={eyebrow:'VECINDARIO',lede:'Hubo un asesinato en el',title:'VECINDARIO',rule:'Todos dicen la verdad. Menos él.',daily:'MISTERIO DIARIO',dailyHelp:'Un caso nuevo cada día. El mismo para todos.',campaign:'MODO CAMPAÑA',campaignHelp:'Barrios sin fin, cada vez más enredados.',campaignLevel:'Nivel {n}',campaignNew:'Nivel 1',campaignResume:'Seguir en el nivel {n}',stats:'MIS INVESTIGACIONES',next:'Próximo misterio en {time}',statusNew:'Sin investigar',statusPlaying:'Investigación en curso',statusWon:'Resuelto · {grade}',statusLost:'Sin resolver'};
+englishCopy.home={eyebrow:'VECINDARIO',lede:'There was a murder in the',title:'VECINDARIO',rule:'Everyone tells the truth. Except them.',daily:'DAILY MYSTERY',dailyHelp:'A new case every day. The same for everyone.',campaign:'CAMPAIGN',campaignHelp:'Endless neighborhoods, each one more tangled.',campaignLevel:'Level {n}',campaignNew:'Level 1',campaignResume:'Continue at level {n}',stats:'MY INVESTIGATIONS',next:'Next mystery in {time}',statusNew:'Not investigated',statusPlaying:'Investigation in progress',statusWon:'Solved · {grade}',statusLost:'Unsolved'};
 spanishCopy.daily={badge:'MISTERIO DIARIO',practiceBadge:'PRÁCTICA',resume:'Retomás la investigación donde la dejaste. Último testimonio:',unavailable:'El misterio de hoy no está disponible.',minimum:'Se podía resolver con {n} interrogatorios.',official:'Resultado oficial guardado.',practice:'Práctica: tu resultado oficial no cambia.',review:'REVISAR CASO',retry:'PRACTICAR',investigations:'MIS INVESTIGACIONES',menu:'MENÚ',solved:'CASO RESUELTO',unsolved:'CASO SIN RESOLVER',solvedText:'Encontraste al único vecino que mentía.',unsolvedText:'El asesino sigue en el barrio.'};
 englishCopy.daily={badge:'DAILY MYSTERY',practiceBadge:'PRACTICE',resume:'You pick up the investigation where you left it. Last testimony:',unavailable:"Today's mystery is not available.",minimum:'It could be solved with {n} questions.',official:'Official result saved.',practice:"Practice: your official result doesn't change.",review:'REVIEW CASE',retry:'PRACTICE',investigations:'MY INVESTIGATIONS',menu:'MENU',solved:'CASE SOLVED',unsolved:'CASE UNSOLVED',solvedText:'You found the only neighbor who was lying.',unsolvedText:'The murderer is still in the neighborhood.'};
 spanishCopy.review={prompt:'Caso cerrado. Tocá cualquier casa para leer su testimonio.',testimony:'Este vecino dijo:',murderer:'El asesino dijo:'};
@@ -121,6 +122,7 @@ export function setLanguage(next){
   try {localStorage.setItem('vecindario.language',next);} catch (_) {}
   if(typeof document!=='undefined') document.documentElement.lang=next;
 }
+englishCopy.navigation={reset:'Reset view'};
 export function t(key,params={},lang=language){
   const lookup=obj=>key.split('.').reduce((v,k)=>v?.[k],obj);
   let value=lookup(translations[lang]);
@@ -134,3 +136,5 @@ export function formatCount(n,unit,lang=language){return `${Number(n).toLocaleSt
 // Compatibility view: consumers still request semantic keys, never match translated text.
 export const uiText=new Proxy({}, {get:(_,key)=>translations[language][key]});
 export function pickDecorativeKey(key){return `${key}.${Math.floor(Math.random()*t(key).length)}`;}
+Object.assign(spanishCopy.shop,{publicSpaces:'ESPACIOS PÚBLICOS',football:'Cancha de fútbol',footballHelp:'Hasta dos canchas. Compra permanente para los próximos barrios.'});
+Object.assign(englishCopy.shop,{publicSpaces:'PUBLIC SPACES',football:'Football pitch',footballHelp:'Up to two pitches. A permanent purchase for future neighborhoods.'});

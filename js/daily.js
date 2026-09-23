@@ -1,7 +1,6 @@
 import { CONFIG } from './config.js';
 import { hashString } from './rng.js';
-import { generateLevel, validateGeneratedLevel } from './generator.js';
-import { getConsistentCandidates } from './solver.js';
+import { dailyV1 } from './daily-v1.js';
 
 // Misterio diario. Todo lo que decide el caso de un día vive acá y es puro: sin
 // DOM, sin almacenamiento, sin idioma. Lo usan el juego y la función del servidor
@@ -83,10 +82,10 @@ export function generateDailyLevel(dateKey, version = null) {
   const entry = version == null ? dailyVersionFor(dateKey) : DAILY_VERSIONS.find((e) => e.version === version && e.from <= dateKey) || null;
   if (!entry) throw new Error(`No hay misterio diario para ${dateKey}`);
   const seed = dailySeed(dateKey, entry);
-  const level = generateLevel(seed, { timed: false, levelNumber: entry.level });
+  const level = dailyV1.generateLevel(seed, { timed: false, levelNumber: entry.level });
   // El generador ya valida, pero el diario es competitivo: se vuelve a exigir
   // solución única y que ningún testimonio aislado identifique al asesino.
-  const verdict = validateGeneratedLevel(level);
+  const verdict = dailyV1.validateGeneratedLevel(level);
   if (!verdict.valid || level.metrics.singleClueUniqueCount !== 0) throw new Error(`Misterio diario inválido para ${dateKey}: ${verdict.reason || 'single_clue'}`);
   level.daily = { date: dateKey, version: entry.version };
   return { level, seed, version: entry.version, levelNumber: entry.level };
@@ -157,7 +156,7 @@ export function replayDaily(level, log) {
     } else if (ev.t === 'accuse') {
       if (!houses.has(ev.id) || accused.has(ev.id)) return invalid('accuse');
       if (ev.id === level.murdererId) {
-        const candidates = getConsistentCandidates(level, observations);
+        const candidates = dailyV1.getConsistentCandidates(level, observations);
         deduced = candidates.length === 1 && candidates[0] === level.murdererId;
         won = true;
         finished = true;

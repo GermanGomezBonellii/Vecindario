@@ -8,19 +8,34 @@ function nodeId(c, r) { return `N${c}_${r}`; }
 function hStreetKey(r) { return `H${r}`; }
 function vStreetKey(c) { return `V${c}`; }
 
-function makeSquareAxes(rng, cols, rows) {
+function makeSquareAxes(rng, cols, rows, maxGridWidth = null, maxGridHeight = null) {
   // Una única unidad geométrica para X e Y: nunca se estiran lotes ni casas.
   const usableWidth = SVG_W - MARGIN_X * 2;
   const usableHeight = SVG_H - MARGIN_Y * 2;
   const widths = rng.shuffle(Array.from({ length: cols }, (_, i) => [1, 2, 3, 4][i % 4]));
   const heights = rng.shuffle(Array.from({ length: rows }, (_, i) => [2, 3, 4][i % 3]));
+  // Allocate whole base cells, before scaling; never squeeze one axis.
+  const fit=(parts,max)=>{
+    if(max==null)return;
+    const total=rng.int(Math.max(parts.length,max-1),max);
+    parts.fill(1);
+    for(let left=total-parts.length;left>0;left--){
+      const eligible=parts.map((v,i)=>v<4?i:-1).filter(i=>i>=0);
+      if(!eligible.length)break;
+      parts[rng.pick(eligible)]++;
+    }
+  };
+  fit(widths,maxGridWidth);fit(heights,maxGridHeight);
   const totalRows = heights.reduce((a,b) => a+b);
-  const cellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / totalRows);
+  const fittedCellSize = Math.min(usableWidth / widths.reduce((a,b) => a+b), usableHeight / totalRows);
+  const cellSize = maxGridWidth==null ? fittedCellSize : Math.max(48,fittedCellSize);
   const gridWidth = cellSize * widths.reduce((a,b) => a+b);
   const gridHeight = cellSize * totalRows;
-  const left = (SVG_W - gridWidth) / 2;
-  const top = (SVG_H - gridHeight) / 2;
+  const width=Math.max(SVG_W,gridWidth+MARGIN_X*2),height=Math.max(SVG_H,gridHeight+MARGIN_Y*2);
+  const left = (width - gridWidth) / 2;
+  const top = (height - gridHeight) / 2;
   return {
+    width,height,
     cellSize,
     x: [left, ...widths.map((_, i) => left + widths.slice(0, i+1).reduce((a,b) => a+b) * cellSize)],
     y: [top, ...heights.map((_, i) => top + heights.slice(0,i+1).reduce((a,b)=>a+b) * cellSize)],
@@ -461,8 +476,8 @@ export function validHouseSizeDistribution(houses, level) {
   return c[1]>houses.length/2 && c[2]<=p.maxTwo && c[3]<=p.maxThree && c[4]<=p.maxFour;
 }
 
-export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0, levelNumber = 1 } = {}) {
-  const { x, y, cellSize } = makeSquareAxes(rng, cols, rows);
+export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0, missingBlocks = 0, levelNumber = 1, maxGridWidth = null, maxGridHeight = null } = {}) {
+  const { x, y, cellSize, width, height } = makeSquareAxes(rng, cols, rows, maxGridWidth, maxGridHeight);
   const allBlocks = createBlockDefinitions(x, y, cols, rows);
   const blocks = selectExistingBlocks(rng, allBlocks, cols, rows, missingBlocks);
   const existingBlockIds = new Set(blocks.map((block) => block.id));
@@ -565,7 +580,7 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
     };
   });
 
-  const map = { width: SVG_W, height: SVG_H, cols, rows, x, y, cellSize, nodes, roadSegments, blocks, houses, removedStreetSegments, missingBlocks: allBlocks.length - blocks.length };
+  const map = { width, height, cols, rows, x, y, cellSize, nodes, roadSegments, blocks, houses, removedStreetSegments, missingBlocks: allBlocks.length - blocks.length };
   map.graph = buildGraph(map);
   map.topology = validateStreetTopology(map);
   return map;

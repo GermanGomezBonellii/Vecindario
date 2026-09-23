@@ -7,6 +7,36 @@ export function getHouseSizeDistribution(level = 1) {
   return { weights: [0,.60-.05*p,.28,.09+.03*p,.03+.02*p], maxTwo: Infinity, maxThree: 2, maxFour: 1, threeChance: 1, fourChance: .35+.25*p };
 }
 
+// Campaign targets are soft; logical invariants and width limits are hard.
+export const PROGRESSION = {
+  maxAttempts: 96, validPool: 4, laterStart: 16, laterStep: 20,
+  laterMinimum: 4, minimumCap: 6,
+  advancedAttempts: 48,
+  advanced: [
+    { from:160, houses:18, cols:6, width:22, extraHeight:1, questions:[7,7] },
+    { from:200, houses:20, cols:6, width:24, extraHeight:2, questions:[8,8] },
+  ],
+};
+export function getAdvancedTier(level) {
+  return PROGRESSION.advanced.filter(t=>level>=t.from).at(-1) || null;
+}
+export function getMaxGridWidth(level) {
+  const n=Math.max(1,Math.floor(Number(level)||1));
+  const tier=getAdvancedTier(n);if(tier)return tier.width;
+  if(n<=3)return 6;
+  if(n<=9)return 7;
+  return 8+Math.floor((n-10)/10);
+}
+export function getQuestionTarget(level) {
+  const tier=getAdvancedTier(level);if(tier)return [...tier.questions];
+  if(level<=3)return [2,2];
+  if(level<=6)return [2,3];
+  if(level<=10)return [3,3];
+  if(level<=15)return [3,4];
+  const min=Math.min(PROGRESSION.minimumCap,PROGRESSION.laterMinimum+Math.floor((level-PROGRESSION.laterStart)/PROGRESSION.laterStep));
+  return [min,Math.min(PROGRESSION.minimumCap,min+1)];
+}
+
 export const CONFIG = {
   GAME_NAME: 'VECINDARIO',
   // Atajos de desarrollo. Con DEBUG en false el juego vuelve a su comportamiento

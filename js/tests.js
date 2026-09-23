@@ -76,7 +76,10 @@ export function runInternalTests() {
     test('progressive levels increase neighborhood complexity', () => {
       const early = getLevelProfile(1);
       const later = getLevelProfile(9);
-      return later.houseCount > early.houseCount && later.clueCandidateFraction > early.clueCandidateFraction && later.streetBreaks >= 4 && later.rows > early.rows && later.missingBlocks > 0;
+      const advanced=getLevelProfile(40),middle=getLevelProfile(19);
+      return later.minQuestions > early.minQuestions && later.clueCandidateFraction > early.clueCandidateFraction
+        && later.maxGridWidth===7 && later.missingBlocks>0
+        && advanced.houseCount===middle.houseCount && advanced.minQuestions>middle.minQuestions;
     }),
     test('accepted rectangular houses occupy complete square cells', () => Array.from({ length: 8 }, (_, i) => generateLevel(`square-layout-${i}`, { levelNumber:9 }).map)
       .every((map) => validateStreetTopology(map).valid && map.houses.every(h=>Math.abs(h.rect.width/h.widthInCells-map.cellSize)<0.001 && Math.abs(h.rect.height/h.heightInCells-map.cellSize)<0.001))),

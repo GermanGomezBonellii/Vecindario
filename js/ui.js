@@ -8,6 +8,7 @@ import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { houseSizeCounts } from './map.js';
 
 import { mountCars } from './car.js';
+import { installBoardControls, boardControlsBlocked } from './board-controls.js';
 import { DAILY_EPOCH, dailyVersionFor, msUntilNextDaily, shiftDateKey } from './daily.js';
 import { onlineEnabled, OnlineClient } from './online.js';
 
@@ -88,6 +89,7 @@ const SHOP_UPGRADES = [
   { id: 'coastal', extra: 'pier' },
   { id: 'car', extra: 'car' },
   { id: 'avenue' },
+  { id: 'football', extra: 'football' },
 ];
 
 export class UI {
@@ -98,7 +100,7 @@ export class UI {
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
       'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopUpgrades','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote',
-      'menuBtn','levelKicker','homeModal','homeDailyBtn','homeDailyDate','homeDailyStatus','homeCountdown','homeCampaignBtn','homeCampaignLevel','homeStatsBtn',
+      'brand','levelKicker','homeModal','homeDailyBtn','homeDailyDate','homeDailyStatus','homeCountdown','homeCampaignBtn','homeCampaignLevel','homeStatsBtn',
       'endGrade','endMinimum','endCountdown','endMenuBtn','reviewBtn','statsModal','statsGrid','calPrev','calNext','calTitle','calWeekdays','calGrid','calDetail',
       'boardTodayTab','boardOverallTab','boardStatus','boardList','boardNameForm','boardNameInput','statsCloseBtn'
     ].map((id) => [id, document.getElementById(id)]));
@@ -492,7 +494,7 @@ export class UI {
     this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
     this.el.debugResetUnlocks.addEventListener('click', () => this.game.resetUnlocks());
     this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
-    this.el.menuBtn?.addEventListener('click', () => this.game.goHome());
+    this.el.brand?.addEventListener('click', () => this.game.goHome());
     this.el.homeDailyBtn?.addEventListener('click', () => this.game.openDaily());
     this.el.homeCampaignBtn?.addEventListener('click', () => this.game.openCampaign());
     this.el.homeStatsBtn?.addEventListener('click', () => this.game.openInvestigations('home'));
@@ -505,12 +507,8 @@ export class UI {
     this.el.boardOverallTab?.addEventListener('click', () => { this.boardTab = 'overall'; this.renderLeaderboard(); });
     this.el.boardNameForm?.addEventListener('submit', (e) => { e.preventDefault(); this.saveBoardName(); });
 
-    this.el.board.addEventListener('pointerup', (e) => {
-      const house = e.target.closest?.('.house');
-      if (!house) return;
-      e.preventDefault();
-      this.game.selectHouse(house.dataset.houseId);
-    });
+    this.boardControls=installBoardControls(this);
+    applyCopy(document);
   }
 
   toggleLogicPanel(force = null) {
@@ -665,7 +663,11 @@ export class UI {
       sleep.textContent = 'Z';
       sleep.style.display = 'none';
       g.appendChild(sleep);
-      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.game.selectHouse(h.id); } });
+      g.addEventListener('keydown', (e) => {
+        if((e.key===' ' || (e.key==='Enter'&&!this.game.selectedHouseId))&&!boardControlsBlocked(this)) {
+          e.preventDefault();this.game.selectHouse(h.id);
+        }
+      });
       housesGroup.appendChild(g);
     }
     if (avenue) {
@@ -687,6 +689,13 @@ export class UI {
       plazasGroup.appendChild(svgEl('rect',{class:'plaza',x,y,width,height}));
     }
     svg.appendChild(plazasGroup);
+    const pitches=svgEl('g',{id:'football-pitches','aria-hidden':'true','pointer-events':'none'});
+    for(const p of level.footballPitches||[]) {
+      const image=svgEl('image',{href:'./assets/football-pitch.svg',width:level.map.cellSize*2,height:level.map.cellSize,
+        transform:p.vertical?`translate(${p.x+p.width} ${p.y}) rotate(90)`:`translate(${p.x} ${p.y})`});
+      pitches.appendChild(image);
+    }
+    svg.appendChild(pitches);
     svg.appendChild(roadsGroup);
     if(level.carEnabled) this.disposeCar=mountCars(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`,level.carCount||1);
 
@@ -707,6 +716,7 @@ export class UI {
     svg.appendChild(selection);
     this.selectionLayer = selection;
     this.selectionRects = [selClipRect, halo, edge];
+    this.boardControls?.attach(level.map);
   }
 
   // Una sola capa reutilizada: sólo se mueven cuatro atributos por selección.
@@ -913,6 +923,7 @@ export class UI {
       const control=document.createElement('button');
       control.type='button';
       control.addEventListener('click',()=>{
+        if(upgrade.id==='football') {this.game.toggleFootball();return;}
         if(this.game.isUpgradeOwned(upgrade.id)) this.game.toggleUpgrade(upgrade.id);
         else this.game.buyUpgrade(upgrade.id);
       });
@@ -929,12 +940,12 @@ export class UI {
         const add=document.createElement('button');
         add.type='button';
         add.className='shop-add';
-        add.addEventListener('click',()=>this.game.buyExtra(upgrade.extra));
+        add.addEventListener('click',()=>upgrade.id==='football'?this.game.buyFootball():this.game.buyExtra(upgrade.extra));
         row.append(label,count,add);
         card.appendChild(row);
         extra={ row, label, count, add, id: upgrade.extra };
       }
-      host.appendChild(card);
+      (upgrade.id==='football'?document.getElementById('shopPublicSpaces'):host).appendChild(card);
       return { upgrade, card, title, help, control, extra };
     });
   }
@@ -993,6 +1004,18 @@ export class UI {
     }
     for(const entry of this.upgradeCards||[]) {
       const { upgrade, card, title, help, control, extra } = entry;
+      if(upgrade.id==='football') {
+        title.textContent=t('shop.football');help.textContent=t('shop.footballHelp');
+        const owned=g.footballCount>0,on=owned&&g.footballEnabled;
+        card.classList.toggle('is-owned',owned);card.classList.toggle('is-on',on);
+        control.className='shop-control shop-switch';control.textContent=t(on?'shop.on':'shop.off');
+        control.disabled=!owned;control.setAttribute('role','switch');control.setAttribute('aria-checked',String(on));
+        control.setAttribute('aria-label',t('shop.football'));
+        extra.label.textContent=t('shop.football');extra.count.textContent=`${g.footballCount}/2`;
+        extra.add.textContent=g.footballCount===2?t('shop.maxed'):'+ −'+g.footballCost().toLocaleString(locale);
+        extra.add.disabled=!g.canBuyFootball();extra.add.setAttribute('aria-label',t('shop.buy')+' '+t('shop.football')+' '+extra.add.textContent);
+        continue;
+      }
       const owned=g.isUpgradeOwned(upgrade.id);
       const on=owned && g.isUpgradeEnabled(upgrade.id);
       title.textContent=t('shop.'+upgrade.id);
@@ -1100,7 +1123,7 @@ export class UI {
           height: Math.max(0, block.height - 10),
           rx: 5,
         });
-        this.el.board.insertBefore(rect, housesGroup);
+        housesGroup.parentNode.insertBefore(rect, housesGroup);
         this.blockHighlightEls.push(rect);
       }
       setTimeout(() => this.clearClueHighlight(), 2100);
@@ -1185,7 +1208,13 @@ export class UI {
     const propertyKeys=['horizontal','vertical','square','elongated','multiple','area1','area2','area3','area4'];
     const properties=Object.values(geometricPropertyCounts(level.map.houses)).map((count,i)=>({label:t('properties.'+propertyKeys[i]),count}));
     const lines=[
-      line('seed',level.seed),line('level',level.levelNumber)+' · '+m.houseCount+' '+d('houses'),'',
+      line('seed',level.seed),line('level',level.levelNumber)+' · '+m.houseCount+' '+d('houses'),
+      ...(m.questionTarget ? [
+        (getLanguage()==='es'?'RETÍCULA (ancho × alto / máximo ancho): ':'GRID (width × height / max width): ')+m.gridWidth+' × '+m.gridHeight+' / '+m.maxGridWidth,
+        (getLanguage()==='es'?'OBJETIVO / MÍNIMO REAL: ':'TARGET / ACTUAL MINIMUM: ')+m.questionTarget.join('–')+' / '+m.minimumQuestions,
+        (getLanguage()==='es'?'DIFICULTAD MATEMÁTICA: ':'MATHEMATICAL DIFFICULTY: ')+m.mathematicalDifficulty,
+        (getLanguage()==='es'?'OBJETIVO ALCANZADO / INTENTOS: ':'TARGET REACHED / ATTEMPTS: ')+d(m.targetReached?'yes':'no')+' / '+level.generationAttempts,
+      ]:[]),'',
       line('murderer',level.murdererId),line('minimum',m.minimumQuestions),line('sets',m.minimumSolvingSets),
       line('single',m.singleClueUniqueCount===0?'OK':'ERROR'),line('reduction',m.averageCandidateReduction),line('redundancy',m.redundancyScore),
       d('families'),...Object.entries(m.clueFamilyCounts||{}).filter(([,n])=>n).map(([f,n])=>'  '+t('families.'+f)+': '+n),

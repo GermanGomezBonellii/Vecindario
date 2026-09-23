@@ -36,10 +36,16 @@ export function findMinimumSolvingSubsets(level) {
   // Cache each predicate's truth mask once; subset search only intersects masks.
   const masks=allObs.map(o=>level.map.houses.reduce((mask,h,i)=>isCandidateConsistent(level,h.id,[o])?mask|(1<<i):mask,0));
   const target=1<<level.map.houses.findIndex(h=>h.id===level.murdererId);
-  const indices=allObs.map((_,i)=>i);
   for (let k = 1; k <= allObs.length; k += 1) {
-    const subsets = combinations(indices, k);
-    const solving = subsets.filter(subset=>subset.reduce((mask,i)=>mask&masks[i],(1<<allObs.length)-1)===target).map(subset=>subset.map(i=>allObs[i]));
+    // Same exact lexicographic search, without materializing every combination.
+    const solving=[],prefix=[];
+    function visit(start,left,mask) {
+      if(!left){if(mask===target)solving.push(prefix.map(i=>allObs[i]));return;}
+      for(let i=start;i<=allObs.length-left;i++){
+        prefix.push(i);visit(i+1,left-1,mask&masks[i]);prefix.pop();
+      }
+    }
+    visit(0,k,(1<<allObs.length)-1);
     if (solving.length) return { minimum: k, subsets: solving };
   }
   return { minimum: Infinity, subsets: [] };
@@ -55,9 +61,8 @@ export function calculateInformationGain(level, observations, houseId) {
   return { before: before.length, after: after.length, gain, ratio: before.length ? gain / before.length : 0 };
 }
 
-export function calculateDifficulty(level) {
+export function calculateDifficulty(level, minimum = findMinimumSolvingSubsets(level)) {
   const fullObs = level.map.houses.map((h) => ({ houseId: h.id, clue: h.clue }));
-  const minimum = findMinimumSolvingSubsets(level);
   const singletonCounts = level.map.houses.map((h) => getConsistentCandidates(level, [{ houseId: h.id, clue: h.clue }]).length);
   const reductions = singletonCounts.map((n) => level.map.houses.length - n);
   const avgReduction = reductions.reduce((a, b) => a + b, 0) / reductions.length;

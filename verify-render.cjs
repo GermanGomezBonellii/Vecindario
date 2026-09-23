@@ -129,8 +129,16 @@ for (const levelNumber of [1,5,12,20]) {
       assert.ok(street.segments.length>=2);
       assert.equal(street.reason,street.crosses?'crosses':'border');
       // Si atraviesa, no le falta ningún tramo de punta a punta.
-      const all=level.map.roadSegments.filter(s=>s.streetKey===street.streetKey);
-      if(street.crosses) assert.equal(street.segments.length,all.length);
+      const all=level.map.roadSegments.filter(s=>s.streetKey===street.streetKey && s.enabled);
+      if(street.crosses) {
+        assert.equal(street.segments.length,all.length);
+        assert.ok(street.contiguous,'no gaps through the real irregular contour');
+        const horizontal=street.orientation==='H',axis=horizontal?all[0].y1:all[0].x1;
+        const blocks=level.map.blocks.filter(b=>axis>=(horizontal?b.y:b.x)-.001&&axis<=(horizontal?b.y+b.height:b.x+b.width)+.001);
+        const from=Math.min(...blocks.map(b=>horizontal?b.x:b.y)),to=Math.max(...blocks.map(b=>horizontal?b.x+b.width:b.y+b.height));
+        assert.ok(Math.abs(Math.min(...all.map(s=>horizontal?s.x1:s.y1))-from)<.001);
+        assert.ok(Math.abs(Math.max(...all.map(s=>horizontal?s.x2:s.y2))-to)<.001);
+      }
       // Una sola calle lógica y un solo trazo de asfalto: sin uniones ni huecos.
       const geo=api.avenueGeometry(street,level.map);
       assert.equal(geo.streetKey,street.streetKey);
