@@ -132,6 +132,87 @@ function applyStreetBreaks(rng, nodes, roadSegments, cols, rows, requested = 0) 
   return removed;
 }
 
+// Lote libre = celda de la manzana que no ocupa ninguna casa. Cuenta sólo si
+// comparte un borde con la casa, nunca en diagonal. Los cuatro lados valen por
+// igual, incluida la parte posterior, y dos lotes libres sobre el mismo lado
+// cuentan como un solo lado. Lo que está fuera de la manzana —las calles y el
+// resto del barrio— no es lote libre. En casas de varios lotes se recorre el
+// perímetro exterior completo.
+// Geometría pura, aunque sólo la use el render: vive con el resto del mapa.
+// Decorative only: scan the validated fine lattice without modifying the map.
+export function detectPlazas(map, levelNumber = 1) {
+  const limit=levelNumber>=50?2:1;
+  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
+  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
+  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
+  const roads=map.roadSegments.filter(s=>s.enabled);
+  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
+  const validCell=(c,r)=>{
+    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
+    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
+  };
+  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
+  const along=(orientation,x,y,sign)=>roads.some(s=>{
+    if(s.orientation!==orientation) return false;
+    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
+    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+    const start=orientation==='H'?x:y;
+    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
+  });
+  const candidates=[];
+  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
+    let valid=true;
+    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
+    if(!valid) continue;
+    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
+    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
+    const right=rect.x+size,bottom=rect.y+size;
+    const crossed=roads.some(s=>s.orientation==='H'
+      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
+      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
+    if(crossed) continue;
+    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
+    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
+    if(cornerCount) candidates.push({...rect,cornerCount});
+  }
+  // Prefer well-defined corners, then proximity to the neighborhood center.
+  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
+  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
+  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
+  const plazas=[];
+  for(const candidate of candidates) {
+    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
+    if(plazas.length>=limit) break;
+  }
+  return plazas;
+}
+
+export function freeSpaceAround(house, block, houses) {
+  const cols = block.lotCols, rows = block.lotRows;
+  const taken = new Set();
+  for (const other of houses) {
+    if (other.blockId !== block.id) continue;
+    const c = other.lot % cols, r = Math.floor(other.lot / cols);
+    for (let dr = 0; dr < other.heightInCells; dr += 1)
+      for (let dc = 0; dc < other.widthInCells; dc += 1) taken.add(`${c + dc},${r + dr}`);
+  }
+  const col = house.lot % cols, row = Math.floor(house.lot / cols);
+  const isFree = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows && !taken.has(`${c},${r}`);
+  let freeAdjacentCells = 0, freeSides = 0;
+  for (const dc of [-1, house.widthInCells]) {
+    let any = false;
+    for (let dr = 0; dr < house.heightInCells; dr += 1) if (isFree(col + dc, row + dr)) { freeAdjacentCells += 1; any = true; }
+    if (any) freeSides += 1;
+  }
+  for (const dr of [-1, house.heightInCells]) {
+    let any = false;
+    for (let dc = 0; dc < house.widthInCells; dc += 1) if (isFree(col + dc, row + dr)) { freeAdjacentCells += 1; any = true; }
+    if (any) freeSides += 1;
+  }
+  return { freeAdjacentCells, freeSides };
+}
+
 export function validateStreetTopology(map) {
   const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
   const degree = (nodeId) => (map.graph.get(nodeId) || []).length;
@@ -158,10 +239,9 @@ export function validateStreetTopology(map) {
     const keys = sides.filter(side => map.roadSegments.some(s => s.enabled && s.id === sideSegmentId(block, side))).map(side => sideStreetKey(block, side));
     if (!keys.length || !keys.includes(house.primaryStreetKey) || keys.length !== house.adjacentStreetKeys.length || keys.some(key => !house.adjacentStreetKeys.includes(key))) return {valid:false, reason:'invalid_street_frontage'};
     const horizontal=keys.some(k=>k[0]==='H'),vertical=keys.some(k=>k[0]==='V');
-    const free=(col>0?h:0)+(col+w<block.lotCols?h:0)+(row>0?w:0)+(row+h<block.lotRows?w:0);
-    const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
+    const space=freeSpaceAround(house, block, map.houses);
     const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
-    if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    if(house.freeSides!==space.freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
     const doorStreetKey = house.doorSide && sideStreetKey(block, house.doorSide);
     if(!actualSides.includes(house.doorSide) || doorStreetKey!==house.primaryStreetKey || house.doorFacing!==DOOR_FACING[house.doorSide]) return {valid:false,reason:'invalid_door_side'};
     const door = doorSegment(house.rect, house.doorSide, map.cellSize);
@@ -173,7 +253,7 @@ export function validateStreetTopology(map) {
     if(Math.abs(drawn.width*drawn.height - map.cellSize*map.cellSize/8)>0.001) return {valid:false,reason:'invalid_door_area'};
     const wall = (house.doorSide==='top'||house.doorSide==='bottom') ? house.rect.width : house.rect.height;
     if((wall - doorLength)/2 < map.cellSize*DOOR_MIN_MARGIN_RATIO - 0.001) return {valid:false,reason:'door_too_close_to_corner'};
-    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
+    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==space.freeAdjacentCells) return {valid:false,reason:'invalid_house_properties'};
   }
   for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
     const a=map.houses[i].rect,b=map.houses[j].rect;
@@ -214,6 +294,31 @@ import { getHouseSizeDistribution } from './config.js';
 export const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
 export const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
 export const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
+// El muelle es apenas más ancho que la calle. Este número tiene que coincidir con
+// el stroke-width de .road-pier en la hoja de estilos; verify-pier lo comprueba.
+export const PIER_WIDTH = 17;
+export const PIER_PLANK_GAP_RATIO = 0.105; // separación entre tablones, en lotes
+export const PIER_PLANK_SKIP = 2;          // tablones omitidos del lado de la ciudad
+
+// Tablones: segmentos perpendiculares al muelle, repartidos a lo largo. El muelle
+// va siempre de la ciudad (x1, sobre la orilla) hacia el mar (x2), y el arranque
+// contra la calle queda macizo: ahí no se dibujan los primeros tablones.
+// Geometría derivada, no toca el mapa.
+export function pierPlanks(pier, cellSize, width = PIER_WIDTH) {
+  const length = Math.abs(pier.x2 - pier.x1);
+  const gap = cellSize * PIER_PLANK_GAP_RATIO;
+  if (!(length > 0) || !(gap > 0)) return [];
+  const count = Math.max(1, Math.round(length / gap) - 1);
+  const step = length / (count + 1);
+  const towardSea = Math.sign(pier.x2 - pier.x1);
+  const half = width / 2;
+  const planks = [];
+  for (let i = 1 + PIER_PLANK_SKIP; i <= count; i += 1) {
+    const x = pier.x1 + towardSea * i * step;
+    planks.push({ x1: x, y1: pier.y1 - half, x2: x, y2: pier.y1 + half });
+  }
+  return planks;
+}
 
 export function selectCoastSide(seed, levelNumber = 1) {
   return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
@@ -568,8 +673,7 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
       facesHorizontalStreet:candidateBorders.some(b=>b.streetKey.startsWith('H')),
       facesVerticalStreet:candidateBorders.some(b=>b.streetKey.startsWith('V')),
       touchesCorner:candidateBorders.some(b=>b.streetKey.startsWith('H')) && candidateBorders.some(b=>b.streetKey.startsWith('V')),
-      freeAdjacentCells:(lotCol>0 ? heightInCells:0)+(lotCol+widthInCells<block.lotCols ? heightInCells:0)+(lotRow>0 ? widthInCells:0)+(lotRow+heightInCells<block.lotRows ? widthInCells:0),
-      freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
+      freeAdjacentCells: 0, freeSides: 0,
       rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
       // El acceso a la calle ya existia: la puerta solo lo hace visible.
@@ -579,6 +683,12 @@ export function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBre
       asked: false, mark: null, confirmedInnocent: false,
     };
   });
+
+  // Recién con todas las casas colocadas se sabe qué lotes quedaron libres.
+  for (const house of houses) {
+    const block = blocks.find((b) => b.id === house.blockId);
+    if (block) Object.assign(house, freeSpaceAround(house, block, houses));
+  }
 
   const map = { width, height, cols, rows, x, y, cellSize, nodes, roadSegments, blocks, houses, removedStreetSegments, missingBlocks: allBlocks.length - blocks.length };
   map.graph = buildGraph(map);

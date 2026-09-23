@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const source=['config','copy','clue-copy','rng','map','clues','solver','generator','car','game'].map(n=>fs.readFileSync(`${__dirname}/js/${n}.js`,'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const source=['config','copy','clue-copy','rng','map','clues','solver','generator','football','car','game'].map(n=>fs.readFileSync(`${__dirname}/js/${n}.js`,'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 class Element {constructor(){this.children=[];this.attrs={};}setAttribute(k,v){this.attrs[k]=v;}appendChild(c){this.children.push(c);}remove(){this.removed=true;}}
 const events=new Map(),mediaEvents=new Map(),callbacks=new Map(),storage=new Map();let raf=0;
 const document={documentElement:{},hidden:false,createElementNS:()=>new Element(),addEventListener:(k,v)=>events.set(k,v),removeEventListener:k=>events.delete(k)};

@@ -3,9 +3,9 @@ import { t, pickDecorativeKey } from './copy.js';
 import { generateLevel, batchValidate } from './generator.js';
 import { bestHintHouse } from './solver.js';
 import { randomSeed, createRng } from './rng.js';
-import { phaseForHour, avenueStreet, coastGeometry, selectCoastSide } from './map.js';
+import { phaseForHour, avenueStreet, coastGeometry, selectCoastSide, detectPlazas } from './map.js';
 import { AudioManager } from './audio.js';
-import { UI, detectPlazas } from './ui.js';
+import { UI } from './ui.js';
 import { footballPlacements } from './football.js';
 import { runInternalTests } from './tests.js';
 import { dailyDateKey, dailyVersionFor, generateDailyLevel, dailyStartScore, replayDaily, readDailyRecord, writeDailyRecord, listDailyRecords, computeDailyStats } from './daily.js';
@@ -43,6 +43,8 @@ const COASTAL_ID = 'coastal';
 const COASTAL_PREF = 'vecindario.style.coastal';
 const CAR_ID = 'car';
 const CAR_PREF = 'vecindario.style.car';
+const BOAT_ID = 'boat';
+const BOAT_PREF = 'vecindario.style.boat';
 const CAR_COUNT_KEY = 'vecindario.count.car';
 const PIER_COUNT_KEY = 'vecindario.count.pier';
 const FOOTBALL_COUNT_KEY = 'vecindario.count.football';
@@ -106,6 +108,8 @@ export class Game {
     this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
     this.carUnlocked = safeReadUnlock(CAR_ID);
     this.carEnabled = this.carUnlocked && safeReadStyle(CAR_PREF);
+    this.boatUnlocked = safeReadUnlock(BOAT_ID);
+    this.boatEnabled = this.boatUnlocked && safeReadStyle(BOAT_PREF);
     // Cantidades: el primer auto y el primer puerto vienen con su mejora.
     this.carCount = this.carUnlocked ? Math.max(1, safeReadCount(CAR_COUNT_KEY, CONFIG.CAR_MAX)) : 0;
     this.pierCount = this.coastalUnlocked ? Math.max(1, safeReadCount(PIER_COUNT_KEY, CONFIG.PIER_MAX)) : 0;
@@ -336,10 +340,13 @@ export class Game {
     // la misma configuración elige siempre la misma calle.
     level.avenue = this.avenueEnabled ? avenueStreet(level.map, { seed: `${seed}|level:${levelNumber}`, coastSide: level.coastSide, exclude: this.avenueExclusions(level) }) : null;
     level.carEnabled = Boolean(this.carEnabled);
+    // Sin costa ni muelle no hay barco que mostrar.
+    level.boatEnabled = Boolean(this.boatEnabled && level.coastSide && this.pierCount > 0);
     level.carCount = this.carCount;
     level.pierCount = this.pierCount;
+    const plazas = detectPlazas(level.map, levelNumber);
     level.footballPitches = this.footballEnabled
-      ? footballPlacements(level.map, detectPlazas(level.map, levelNumber), this.footballCount, `${seed}|${levelNumber}`) : [];
+      ? footballPlacements(level.map, plazas, this.footballCount, `${seed}|${levelNumber}`) : [];
     return level;
   }
 
@@ -658,17 +665,45 @@ export class Game {
     this.ui.refresh();
     return true;
   }
-  upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST }[id]; }
+  upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST, boat: CONFIG.BOAT_COST }[id]; }
 
-  isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked }[id]); }
+  isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked, boat: this.boatUnlocked }[id]); }
 
-  isUpgradeEnabled(id) { return Boolean({ coastal: this.coastalEnabled, avenue: this.avenueEnabled, car: this.carEnabled }[id]); }
+  isUpgradeEnabled(id) { return Boolean({ coastal: this.coastalEnabled, avenue: this.avenueEnabled, car: this.carEnabled, boat: this.boatEnabled }[id]); }
 
-  canBuyUpgrade(id) { return { coastal: this.canBuyCoastal(), avenue: this.canBuyAvenue(), car: this.canBuyCar() }[id]; }
+  canBuyUpgrade(id) { return { coastal: this.canBuyCoastal(), avenue: this.canBuyAvenue(), car: this.canBuyCar(), boat: this.canBuyBoat() }[id]; }
 
-  buyUpgrade(id) { return { coastal: () => this.buyCoastal(), avenue: () => this.buyAvenue(), car: () => this.buyCar() }[id](); }
+  // --- Barco costero: cuelga de los puertos ------------------------------------
+  // Sin muelle no hay dónde atracar, así que no se puede comprar ni se muestra.
+  hasPier() { return Boolean(this.coastalUnlocked && this.pierCount > 0); }
 
-  setUpgrade(id, on) { return { coastal: () => this.setCoastal(on), avenue: () => this.setAvenue(on), car: () => this.setCar(on) }[id](); }
+  canBuyBoat() {
+    return Boolean(this.shopOpen && this.canUseShop() && this.hasPier()
+      && !this.boatUnlocked && this.score >= CONFIG.BOAT_COST);
+  }
+
+  buyBoat() {
+    if (!this.canBuyBoat()) return false;
+    this.score -= CONFIG.BOAT_COST;
+    this.boatUnlocked = true;
+    safeSaveUnlock(BOAT_ID);
+    this.setBoat(true);
+    return true;
+  }
+
+  setBoat(enabled) {
+    if (!this.boatUnlocked) return false;
+    this.boatEnabled = Boolean(enabled);
+    safeSaveStyle(BOAT_PREF, this.boatEnabled);
+    this.ui.refreshShop?.();
+    return true;
+  }
+
+  toggleBoat() { return this.setBoat(!this.boatEnabled); }
+
+  buyUpgrade(id) { return { coastal: () => this.buyCoastal(), avenue: () => this.buyAvenue(), car: () => this.buyCar(), boat: () => this.buyBoat() }[id](); }
+
+  setUpgrade(id, on) { return { coastal: () => this.setCoastal(on), avenue: () => this.setAvenue(on), car: () => this.setCar(on), boat: () => this.setBoat(on) }[id](); }
 
   toggleUpgrade(id) { return this.setUpgrade(id, !this.isUpgradeEnabled(id)); }
 
@@ -703,6 +738,8 @@ export class Game {
     this.avenueEnabled = false;
     this.carUnlocked = false;
     this.carEnabled = false;
+    this.boatUnlocked = false;
+    this.boatEnabled = false;
     this.carCount = 0;
     this.pierCount = 0;
     this.footballCount = 0;

@@ -59,6 +59,9 @@ export const CONFIG = {
   CAR_MAX: 3,
   PIER_COST: 6000,
   PIER_MAX: 3,
+  // Barco costero: se define más adelante. Todo lo demás ya lo respeta.
+  BOAT_COST: 12000,
+  BOAT_MAX: 1,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,

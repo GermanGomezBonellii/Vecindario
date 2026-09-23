@@ -63,6 +63,9 @@ const CONFIG = {
   CAR_MAX: 3,
   PIER_COST: 6000,
   PIER_MAX: 3,
+  // Barco costero: se define más adelante. Todo lo demás ya lo respeta.
+  BOAT_COST: 12000,
+  BOAT_MAX: 1,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -190,8 +193,8 @@ spanishCopy.defeat.text='No te quedan vidas.';
 englishCopy.defeat.text="You have no lives left.";
 spanishCopy.lifePurchase={full:'Ya tenés todas las vidas.',poor:'Necesitás 3000 puntos.',ready:'Comprá una vida por 3000 puntos.'};
 englishCopy.lifePurchase={full:'Your lives are full.',poor:'You need 3000 points.',ready:'Buy one life for 3000 points.'};
-spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'El barrio termina contra el mar.',car:'Auto',carHelp:'Autos recorriendo las calles.',carOn:'Activado',carOff:'Desactivado',avenue:'Avenida con boulevard',avenueHelp:'Una calle se vuelve doble calzada.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar',on:'ON',off:'OFF',cars:'Autos',piers:'Puertos',carExtra:'Auto',pierExtra:'Puerto',maxed:'Completo',needsCoast:'Necesita el mar'};
-englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'The neighborhood ends at the sea.',car:'Car',carHelp:'Cars driving the streets.',carOn:'On',carOff:'Off',avenue:'Boulevard Avenue',avenueHelp:'One street becomes a dual carriageway.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off',on:'ON',off:'OFF',cars:'Cars',piers:'Ports',carExtra:'Car',pierExtra:'Port',maxed:'Full',needsCoast:'Needs the sea'};
+spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'El barrio termina contra el mar.',car:'Auto',carHelp:'Autos recorriendo las calles.',carOn:'Activado',carOff:'Desactivado',avenue:'Avenida con boulevard',avenueHelp:'Una calle se vuelve doble calzada.',boat:'Barco',boatHelp:'Recorre la costa y hace escala en cada muelle.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar',on:'ON',off:'OFF',cars:'Autos',piers:'Puertos',carExtra:'Auto',pierExtra:'Puerto',maxed:'Completo',needsCoast:'Necesita el mar'};
+englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'The neighborhood ends at the sea.',car:'Car',carHelp:'Cars driving the streets.',carOn:'On',carOff:'Off',avenue:'Boulevard Avenue',avenueHelp:'One street becomes a dual carriageway.',boat:'Boat',boatHelp:'Sails the coast and calls at every pier.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off',on:'ON',off:'OFF',cars:'Cars',piers:'Ports',carExtra:'Car',pierExtra:'Port',maxed:'Full',needsCoast:'Needs the sea'};
 spanishCopy.themes={
   day:{name:'Claro',short:'\u263c CLARO',help:'El barrio a plena luz. Siempre disponible.'},
   night:{name:'Oscuro',short:'\u263e OSCURO',help:'Tinta clara sobre fondo profundo. Siempre disponible.'},
@@ -294,7 +297,7 @@ const clueTranslations={es:{
   FACES_MORE_THAN_ONE_STREET:['Su casa mira a más de una calle.'],
   CORNER_HOUSE:['Su casa da a dos calles que forman una esquina.'],
   HAS_FREE_ADJACENT_SPACE:['Tiene algún lote libre pegado a su casa, dentro de su manzana.'],
-  HAS_MULTIPLE_FREE_SIDES:['Tiene lotes libres junto a por lo menos dos lados de su casa, en su manzana.'],
+  HAS_MULTIPLE_FREE_SIDES:['Tiene lotes libres junto a por lo menos dos lados de su casa, contando también la parte posterior.'],
   MORE_OPEN_SPACE_THAN_SPEAKER:['Dentro de su manzana, tiene más lotes libres pegados a la casa que yo.'],
   SPANS_MULTIPLE_GRID_CELLS:['Su casa ocupa más de un cuadrado de la retícula.'],
   SAME_SIDE_OF_STREET:['Su casa está del mismo lado de esta calle que la mía.'],
@@ -323,7 +326,7 @@ const clueTranslations={es:{
   FACES_MORE_THAN_ONE_STREET:['Their house faces more than one street.'],
   CORNER_HOUSE:['Their house faces two streets that form a corner.'],
   HAS_FREE_ADJACENT_SPACE:['An empty lot touches their house within their block.'],
-  HAS_MULTIPLE_FREE_SIDES:['Empty lots touch at least two sides of their house within their block.'],
+  HAS_MULTIPLE_FREE_SIDES:['Empty lots touch at least two different sides of their house, the back included.'],
   MORE_OPEN_SPACE_THAN_SPEAKER:['Within their block, more empty lots touch their house than mine.'],
   SPANS_MULTIPLE_GRID_CELLS:['Their house covers more than one grid square.'],
   SAME_SIDE_OF_STREET:['Their house is on the same side of this street as mine.'],
@@ -522,6 +525,87 @@ function applyStreetBreaks(rng, nodes, roadSegments, cols, rows, requested = 0) 
   return removed;
 }
 
+// Lote libre = celda de la manzana que no ocupa ninguna casa. Cuenta sólo si
+// comparte un borde con la casa, nunca en diagonal. Los cuatro lados valen por
+// igual, incluida la parte posterior, y dos lotes libres sobre el mismo lado
+// cuentan como un solo lado. Lo que está fuera de la manzana —las calles y el
+// resto del barrio— no es lote libre. En casas de varios lotes se recorre el
+// perímetro exterior completo.
+// Geometría pura, aunque sólo la use el render: vive con el resto del mapa.
+// Decorative only: scan the validated fine lattice without modifying the map.
+function detectPlazas(map, levelNumber = 1) {
+  const limit=levelNumber>=50?2:1;
+  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
+  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
+  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
+  const roads=map.roadSegments.filter(s=>s.enabled);
+  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
+  const validCell=(c,r)=>{
+    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
+    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
+  };
+  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
+  const along=(orientation,x,y,sign)=>roads.some(s=>{
+    if(s.orientation!==orientation) return false;
+    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
+    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
+    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
+    const start=orientation==='H'?x:y;
+    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
+  });
+  const candidates=[];
+  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
+    let valid=true;
+    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
+    if(!valid) continue;
+    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
+    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
+    const right=rect.x+size,bottom=rect.y+size;
+    const crossed=roads.some(s=>s.orientation==='H'
+      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
+      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
+    if(crossed) continue;
+    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
+    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
+    if(cornerCount) candidates.push({...rect,cornerCount});
+  }
+  // Prefer well-defined corners, then proximity to the neighborhood center.
+  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
+  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
+  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
+  const plazas=[];
+  for(const candidate of candidates) {
+    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
+    if(plazas.length>=limit) break;
+  }
+  return plazas;
+}
+
+function freeSpaceAround(house, block, houses) {
+  const cols = block.lotCols, rows = block.lotRows;
+  const taken = new Set();
+  for (const other of houses) {
+    if (other.blockId !== block.id) continue;
+    const c = other.lot % cols, r = Math.floor(other.lot / cols);
+    for (let dr = 0; dr < other.heightInCells; dr += 1)
+      for (let dc = 0; dc < other.widthInCells; dc += 1) taken.add(`${c + dc},${r + dr}`);
+  }
+  const col = house.lot % cols, row = Math.floor(house.lot / cols);
+  const isFree = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows && !taken.has(`${c},${r}`);
+  let freeAdjacentCells = 0, freeSides = 0;
+  for (const dc of [-1, house.widthInCells]) {
+    let any = false;
+    for (let dr = 0; dr < house.heightInCells; dr += 1) if (isFree(col + dc, row + dr)) { freeAdjacentCells += 1; any = true; }
+    if (any) freeSides += 1;
+  }
+  for (const dr of [-1, house.heightInCells]) {
+    let any = false;
+    for (let dc = 0; dc < house.widthInCells; dc += 1) if (isFree(col + dc, row + dr)) { freeAdjacentCells += 1; any = true; }
+    if (any) freeSides += 1;
+  }
+  return { freeAdjacentCells, freeSides };
+}
+
 function validateStreetTopology(map) {
   const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
   const degree = (nodeId) => (map.graph.get(nodeId) || []).length;
@@ -548,10 +632,9 @@ function validateStreetTopology(map) {
     const keys = sides.filter(side => map.roadSegments.some(s => s.enabled && s.id === sideSegmentId(block, side))).map(side => sideStreetKey(block, side));
     if (!keys.length || !keys.includes(house.primaryStreetKey) || keys.length !== house.adjacentStreetKeys.length || keys.some(key => !house.adjacentStreetKeys.includes(key))) return {valid:false, reason:'invalid_street_frontage'};
     const horizontal=keys.some(k=>k[0]==='H'),vertical=keys.some(k=>k[0]==='V');
-    const free=(col>0?h:0)+(col+w<block.lotCols?h:0)+(row>0?w:0)+(row+h<block.lotRows?w:0);
-    const freeSides=[col>0,col+w<block.lotCols,row>0,row+h<block.lotRows].filter(Boolean).length;
+    const space=freeSpaceAround(house, block, map.houses);
     const actualSides=sides.filter(side=>map.roadSegments.some(s=>s.enabled && s.id===sideSegmentId(block,side)));
-    if(house.freeSides!==freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
+    if(house.freeSides!==space.freeSides || actualSides.length!==house.streetSides.length || actualSides.some(side=>!house.streetSides.includes(side))) return {valid:false,reason:'invalid_house_sides'};
     const doorStreetKey = house.doorSide && sideStreetKey(block, house.doorSide);
     if(!actualSides.includes(house.doorSide) || doorStreetKey!==house.primaryStreetKey || house.doorFacing!==DOOR_FACING[house.doorSide]) return {valid:false,reason:'invalid_door_side'};
     const door = doorSegment(house.rect, house.doorSide, map.cellSize);
@@ -563,7 +646,7 @@ function validateStreetTopology(map) {
     if(Math.abs(drawn.width*drawn.height - map.cellSize*map.cellSize/8)>0.001) return {valid:false,reason:'invalid_door_area'};
     const wall = (house.doorSide==='top'||house.doorSide==='bottom') ? house.rect.width : house.rect.height;
     if((wall - doorLength)/2 < map.cellSize*DOOR_MIN_MARGIN_RATIO - 0.001) return {valid:false,reason:'door_too_close_to_corner'};
-    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==free) return {valid:false,reason:'invalid_house_properties'};
+    if(house.frontageCount!==keys.length || house.facesHorizontalStreet!==horizontal || house.facesVerticalStreet!==vertical || house.touchesCorner!==(horizontal&&vertical) || house.isHorizontal!==(w>h) || house.isVertical!==(h>w) || house.isSquare!==(w===h) || house.isElongated!==(Math.max(w,h)>=2*Math.min(w,h)) || house.freeAdjacentCells!==space.freeAdjacentCells) return {valid:false,reason:'invalid_house_properties'};
   }
   for (let i=0;i<map.houses.length;i++) for(let j=i+1;j<map.houses.length;j++) {
     const a=map.houses[i].rect,b=map.houses[j].rect;
@@ -603,6 +686,31 @@ function sideStreetKey(block, side) {
 const COAST_FOAM_RATIO = 0.22;   // ancho de la espuma, en lotes
 const COAST_BLEED = 60;          // el agua se sale del viewBox y la tarjeta la recorta
 const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en lotes
+// El muelle es apenas más ancho que la calle. Este número tiene que coincidir con
+// el stroke-width de .road-pier en la hoja de estilos; verify-pier lo comprueba.
+const PIER_WIDTH = 17;
+const PIER_PLANK_GAP_RATIO = 0.105; // separación entre tablones, en lotes
+const PIER_PLANK_SKIP = 2;          // tablones omitidos del lado de la ciudad
+
+// Tablones: segmentos perpendiculares al muelle, repartidos a lo largo. El muelle
+// va siempre de la ciudad (x1, sobre la orilla) hacia el mar (x2), y el arranque
+// contra la calle queda macizo: ahí no se dibujan los primeros tablones.
+// Geometría derivada, no toca el mapa.
+function pierPlanks(pier, cellSize, width = PIER_WIDTH) {
+  const length = Math.abs(pier.x2 - pier.x1);
+  const gap = cellSize * PIER_PLANK_GAP_RATIO;
+  if (!(length > 0) || !(gap > 0)) return [];
+  const count = Math.max(1, Math.round(length / gap) - 1);
+  const step = length / (count + 1);
+  const towardSea = Math.sign(pier.x2 - pier.x1);
+  const half = width / 2;
+  const planks = [];
+  for (let i = 1 + PIER_PLANK_SKIP; i <= count; i += 1) {
+    const x = pier.x1 + towardSea * i * step;
+    planks.push({ x1: x, y1: pier.y1 - half, x2: x, y2: pier.y1 + half });
+  }
+  return planks;
+}
 
 function selectCoastSide(seed, levelNumber = 1) {
   return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
@@ -957,8 +1065,7 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
       facesHorizontalStreet:candidateBorders.some(b=>b.streetKey.startsWith('H')),
       facesVerticalStreet:candidateBorders.some(b=>b.streetKey.startsWith('V')),
       touchesCorner:candidateBorders.some(b=>b.streetKey.startsWith('H')) && candidateBorders.some(b=>b.streetKey.startsWith('V')),
-      freeAdjacentCells:(lotCol>0 ? heightInCells:0)+(lotCol+widthInCells<block.lotCols ? heightInCells:0)+(lotRow>0 ? widthInCells:0)+(lotRow+heightInCells<block.lotRows ? widthInCells:0),
-      freeSides:[lotCol>0,lotCol+widthInCells<block.lotCols,lotRow>0,lotRow+heightInCells<block.lotRows].filter(Boolean).length,
+      freeAdjacentCells: 0, freeSides: 0,
       rect: { x: rx, y: ry, width: rw, height: rh }, center,
       accessNodeId, primaryStreetKey: access.streetKey,
       // El acceso a la calle ya existia: la puerta solo lo hace visible.
@@ -968,6 +1075,12 @@ function generateMap(rng, { cols = 4, rows = 3, houseCount = 8, streetBreaks = 0
       asked: false, mark: null, confirmedInnocent: false,
     };
   });
+
+  // Recién con todas las casas colocadas se sabe qué lotes quedaron libres.
+  for (const house of houses) {
+    const block = blocks.find((b) => b.id === house.blockId);
+    if (block) Object.assign(house, freeSpaceAround(house, block, houses));
+  }
 
   const map = { width, height, cols, rows, x, y, cellSize, nodes, roadSegments, blocks, houses, removedStreetSegments, missingBlocks: allBlocks.length - blocks.length };
   map.graph = buildGraph(map);
@@ -3499,6 +3612,155 @@ function footballPlacements(map, plazas, count, seed) {
   return candidates.slice(0,1);
 }
 
+// ---- boat.js ----
+// Barco decorativo: navega el mar en paralelo a la costa y hace escala en cada
+// muelle. Igual que los autos, es una vista privada: no toca el grafo de calles,
+// ni el solver, ni consume la tirada del generador.
+
+// Dibujo en unidades de diseño, +X hacia la proa.
+const BOAT_LENGTH = 10;                 // de popa a proa
+const BOAT_BEAM = 4.4;                  // manga
+const BOAT_LENGTH_RATIO = 0.62;  // largo del barco, en lotes
+const BOAT_SPEED = 46;           // unidades del tablero por segundo
+const BOAT_DOCK_SECONDS = 1.5;   // lo que dura cada escala
+const BOAT_CLEARANCE_RATIO = 0.16; // aire entre la punta del muelle y el casco, en lotes
+
+const smooth = (t) => t * t * (3 - 2 * t);
+
+// Recorrido: de un extremo del barrio al otro por una calzada de agua que pasa
+// por fuera de todas las puntas de muelle, con una escala en cada una. Al llegar
+// al final invierte el sentido y repite.
+function createBoatRoute(map, coast, { lengthRatio = BOAT_LENGTH_RATIO } = {}) {
+  if (!coast || !coast.piers?.length) return null;
+  const toSea = coast.side === 'left' ? -1 : 1;
+
+  // La punta de muelle que más entra al mar manda: la calzada pasa por fuera de
+  // todas, así el barco atraca al lado y nunca las atraviesa.
+  const tips = coast.piers.map((p) => (coast.side === 'left' ? Math.min(p.x1, p.x2) : Math.max(p.x1, p.x2)));
+  const outermost = coast.side === 'left' ? Math.min(...tips) : Math.max(...tips);
+
+  // Entre esa punta y el borde del tablero hay un ancho fijo de agua. Si el barco
+  // a tamaño normal no entra —pasa con lotes grandes, donde el muelle se come casi
+  // todo el mar visible— se achica lo justo para caber: siempre por fuera del
+  // muelle y siempre entero dentro del tablero, nunca recortado por el marco.
+  const boardEdge = coast.side === 'left' ? 0 : map.width;
+  const available = Math.abs(boardEdge - outermost) * 0.94;
+  let scale = map.cellSize * lengthRatio / BOAT_LENGTH;
+  let gap = map.cellSize * BOAT_CLEARANCE_RATIO;
+  const needed = BOAT_BEAM * scale + gap;
+  if (needed > available && available > 0) {
+    const shrink = available / needed;
+    scale *= shrink;
+    gap *= shrink;
+  }
+  const halfBeam = BOAT_BEAM * scale / 2;
+  const halfLength = BOAT_LENGTH * scale / 2;
+  const laneX = outermost + toSea * (halfBeam + gap);
+
+  const stops = [...new Set(coast.piers.map((p) => p.y))].sort((a, b) => a - b);
+  // Los extremos del recorrido: el barco entero dentro del barrio, salvo que un
+  // muelle nazca justo en el borde, en cuyo caso el recorrido llega hasta ahí.
+  const first = map.y[0] + halfLength;
+  const last = map.y.at(-1) - halfLength;
+  const ends = [
+    Math.min(first, last, ...stops),
+    Math.max(first, last, ...stops),
+  ];
+
+  const leg = (downward) => {
+    const angle = downward ? 90 : -90;   // la proa mira hacia donde navega
+    const ordered = downward ? stops : [...stops].reverse();
+    const startY = downward ? ends[0] : ends[1];
+    const endY = downward ? ends[1] : ends[0];
+    const phases = [];
+    let y = startY;
+    const sail = (from, to) => {
+      const distance = Math.abs(to - from);
+      phases.push({
+        duration: distance / BOAT_SPEED,
+        sample: (t) => ({ x: laneX, y: from + (to - from) * smooth(t), angle }),
+      });
+    };
+    for (const stop of ordered) {
+      // Una escala fuera del tramo recorrido sería un salto hacia atrás.
+      if ((downward && stop < y) || (!downward && stop > y)) continue;
+      sail(y, stop);
+      phases.push({ duration: BOAT_DOCK_SECONDS, sample: () => ({ x: laneX, y: stop, angle }) });
+      y = stop;
+    }
+    sail(y, endY);
+    return phases;
+  };
+
+  let downward = true;
+  return {
+    laneX, stops, ends, scale, halfBeam, halfLength,
+    initial: { x: laneX, y: ends[0], angle: 90 },
+    next: () => { const phases = leg(downward); downward = !downward; return phases; },
+  };
+}
+
+function mountBoat(svg, map, coast, { lengthRatio = BOAT_LENGTH_RATIO } = {}) {
+  const route = createBoatRoute(map, coast, { lengthRatio });
+  if (!route) return () => {};
+  const NS = 'http://www.w3.org/2000/svg';
+  const group = document.createElementNS(NS, 'g');
+  group.setAttribute('class', 'decorative-boat');
+  group.setAttribute('pointer-events', 'none');
+  group.setAttribute('aria-hidden', 'true');
+
+  // Silueta desde arriba: casco negro con proa en punta, una cubierta clara cerca
+  // de la popa y una marca fina en la proa. Nada más: a este tamaño cualquier
+  // detalle extra es ruido.
+  const hull = document.createElementNS(NS, 'path');
+  hull.setAttribute('class', 'boat-hull');
+  hull.setAttribute('d', 'M5 0L1.6 -2.2H-5V2.2H1.6Z');
+  group.appendChild(hull);
+  for (const [x, y, w, h, cls] of [
+    [-3.4, -1.2, 2.6, 2.4, 'boat-deck'],
+    [1.5, -0.45, 1.6, 0.9, 'boat-bow'],
+  ]) {
+    const rect = document.createElementNS(NS, 'rect');
+    for (const [key, value] of Object.entries({ x, y, width: w, height: h })) rect.setAttribute(key, value);
+    rect.setAttribute('class', cls);
+    group.appendChild(rect);
+  }
+
+  const draw = (p) => group.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${p.angle}) scale(${route.scale})`);
+  draw(route.initial);
+  svg.appendChild(group);
+
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let frames = route.next(), elapsed = 0, last = null, raf = null, disposed = false;
+  const frame = (now) => {
+    raf = null;
+    if (disposed || document.hidden || motion.matches) return;
+    if (last !== null) elapsed += Math.min((now - last) / 1000, 0.1);
+    last = now;
+    while (elapsed >= frames[0].duration) {
+      elapsed -= frames.shift().duration;
+      if (!frames.length) frames = route.next();
+    }
+    draw(frames[0].sample(elapsed / frames[0].duration));
+    raf = requestAnimationFrame(frame);
+  };
+  const sync = () => {
+    if (raf !== null) cancelAnimationFrame(raf);
+    raf = null; last = null;
+    if (!disposed && !document.hidden && !motion.matches) raf = requestAnimationFrame(frame);
+  };
+  document.addEventListener('visibilitychange', sync);
+  motion.addEventListener('change', sync);
+  sync();
+  return () => {
+    disposed = true;
+    if (raf !== null) cancelAnimationFrame(raf);
+    document.removeEventListener('visibilitychange', sync);
+    motion.removeEventListener('change', sync);
+    group.remove();
+  };
+}
+
 // ---- game.js ----
 
 const UNLOCK_PREFIX = UNLOCK_NAMESPACE;
@@ -3533,6 +3795,8 @@ const COASTAL_ID = 'coastal';
 const COASTAL_PREF = 'vecindario.style.coastal';
 const CAR_ID = 'car';
 const CAR_PREF = 'vecindario.style.car';
+const BOAT_ID = 'boat';
+const BOAT_PREF = 'vecindario.style.boat';
 const CAR_COUNT_KEY = 'vecindario.count.car';
 const PIER_COUNT_KEY = 'vecindario.count.pier';
 const FOOTBALL_COUNT_KEY = 'vecindario.count.football';
@@ -3596,6 +3860,8 @@ class Game {
     this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
     this.carUnlocked = safeReadUnlock(CAR_ID);
     this.carEnabled = this.carUnlocked && safeReadStyle(CAR_PREF);
+    this.boatUnlocked = safeReadUnlock(BOAT_ID);
+    this.boatEnabled = this.boatUnlocked && safeReadStyle(BOAT_PREF);
     // Cantidades: el primer auto y el primer puerto vienen con su mejora.
     this.carCount = this.carUnlocked ? Math.max(1, safeReadCount(CAR_COUNT_KEY, CONFIG.CAR_MAX)) : 0;
     this.pierCount = this.coastalUnlocked ? Math.max(1, safeReadCount(PIER_COUNT_KEY, CONFIG.PIER_MAX)) : 0;
@@ -3826,10 +4092,13 @@ class Game {
     // la misma configuración elige siempre la misma calle.
     level.avenue = this.avenueEnabled ? avenueStreet(level.map, { seed: `${seed}|level:${levelNumber}`, coastSide: level.coastSide, exclude: this.avenueExclusions(level) }) : null;
     level.carEnabled = Boolean(this.carEnabled);
+    // Sin costa ni muelle no hay barco que mostrar.
+    level.boatEnabled = Boolean(this.boatEnabled && level.coastSide && this.pierCount > 0);
     level.carCount = this.carCount;
     level.pierCount = this.pierCount;
+    const plazas = detectPlazas(level.map, levelNumber);
     level.footballPitches = this.footballEnabled
-      ? footballPlacements(level.map, detectPlazas(level.map, levelNumber), this.footballCount, `${seed}|${levelNumber}`) : [];
+      ? footballPlacements(level.map, plazas, this.footballCount, `${seed}|${levelNumber}`) : [];
     return level;
   }
 
@@ -4148,17 +4417,45 @@ class Game {
     this.ui.refresh();
     return true;
   }
-  upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST }[id]; }
+  upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST, boat: CONFIG.BOAT_COST }[id]; }
 
-  isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked }[id]); }
+  isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked, boat: this.boatUnlocked }[id]); }
 
-  isUpgradeEnabled(id) { return Boolean({ coastal: this.coastalEnabled, avenue: this.avenueEnabled, car: this.carEnabled }[id]); }
+  isUpgradeEnabled(id) { return Boolean({ coastal: this.coastalEnabled, avenue: this.avenueEnabled, car: this.carEnabled, boat: this.boatEnabled }[id]); }
 
-  canBuyUpgrade(id) { return { coastal: this.canBuyCoastal(), avenue: this.canBuyAvenue(), car: this.canBuyCar() }[id]; }
+  canBuyUpgrade(id) { return { coastal: this.canBuyCoastal(), avenue: this.canBuyAvenue(), car: this.canBuyCar(), boat: this.canBuyBoat() }[id]; }
 
-  buyUpgrade(id) { return { coastal: () => this.buyCoastal(), avenue: () => this.buyAvenue(), car: () => this.buyCar() }[id](); }
+  // --- Barco costero: cuelga de los puertos ------------------------------------
+  // Sin muelle no hay dónde atracar, así que no se puede comprar ni se muestra.
+  hasPier() { return Boolean(this.coastalUnlocked && this.pierCount > 0); }
 
-  setUpgrade(id, on) { return { coastal: () => this.setCoastal(on), avenue: () => this.setAvenue(on), car: () => this.setCar(on) }[id](); }
+  canBuyBoat() {
+    return Boolean(this.shopOpen && this.canUseShop() && this.hasPier()
+      && !this.boatUnlocked && this.score >= CONFIG.BOAT_COST);
+  }
+
+  buyBoat() {
+    if (!this.canBuyBoat()) return false;
+    this.score -= CONFIG.BOAT_COST;
+    this.boatUnlocked = true;
+    safeSaveUnlock(BOAT_ID);
+    this.setBoat(true);
+    return true;
+  }
+
+  setBoat(enabled) {
+    if (!this.boatUnlocked) return false;
+    this.boatEnabled = Boolean(enabled);
+    safeSaveStyle(BOAT_PREF, this.boatEnabled);
+    this.ui.refreshShop?.();
+    return true;
+  }
+
+  toggleBoat() { return this.setBoat(!this.boatEnabled); }
+
+  buyUpgrade(id) { return { coastal: () => this.buyCoastal(), avenue: () => this.buyAvenue(), car: () => this.buyCar(), boat: () => this.buyBoat() }[id](); }
+
+  setUpgrade(id, on) { return { coastal: () => this.setCoastal(on), avenue: () => this.setAvenue(on), car: () => this.setCar(on), boat: () => this.setBoat(on) }[id](); }
 
   toggleUpgrade(id) { return this.setUpgrade(id, !this.isUpgradeEnabled(id)); }
 
@@ -4193,6 +4490,8 @@ class Game {
     this.avenueEnabled = false;
     this.carUnlocked = false;
     this.carEnabled = false;
+    this.boatUnlocked = false;
+    this.boatEnabled = false;
     this.carCount = 0;
     this.pierCount = 0;
     this.footballCount = 0;
@@ -4576,58 +4875,10 @@ function svgEl(tag, attrs = {}) {
   return el;
 }
 
-// Decorative only: scan the validated fine lattice without modifying the map.
-function detectPlazas(map, levelNumber = 1) {
-  const limit=levelNumber>=50?2:1;
-  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
-  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
-  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
-  const roads=map.roadSegments.filter(s=>s.enabled);
-  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
-  const validCell=(c,r)=>{
-    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
-    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
-  };
-  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
-  const along=(orientation,x,y,sign)=>roads.some(s=>{
-    if(s.orientation!==orientation) return false;
-    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
-    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
-    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
-    const start=orientation==='H'?x:y;
-    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
-  });
-  const candidates=[];
-  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
-    let valid=true;
-    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
-    if(!valid) continue;
-    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
-    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
-    const right=rect.x+size,bottom=rect.y+size;
-    const crossed=roads.some(s=>s.orientation==='H'
-      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
-      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
-    if(crossed) continue;
-    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
-    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
-    if(cornerCount) candidates.push({...rect,cornerCount});
-  }
-  // Prefer well-defined corners, then proximity to the neighborhood center.
-  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
-  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
-  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
-  const plazas=[];
-  for(const candidate of candidates) {
-    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
-    if(plazas.length>=limit) break;
-  }
-  return plazas;
-}
 
 // Orden y agregados de cada mejora. La tienda no sabe nada más que esto.
 const SHOP_UPGRADES = [
-  { id: 'coastal', extra: 'pier' },
+  { id: 'coastal', extra: 'pier', sub: 'boat' },
   { id: 'car', extra: 'car' },
   { id: 'avenue' },
   { id: 'football', extra: 'football' },
@@ -5066,6 +5317,8 @@ class UI {
   renderMap(level) {
     this.disposeCar?.();
     this.disposeCar = null;
+    this.disposeBoat?.();
+    this.disposeBoat = null;
     const svg = this.el.board;
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
@@ -5073,6 +5326,14 @@ class UI {
 
     const defs = svgEl('defs');
     svg.appendChild(defs);
+
+    // El tablero es verde de fondo. La ciudad recupera el suyo con una base por
+    // manzana, así el interior queda como estaba y sólo el exterior es terreno.
+    const cityBase = svgEl('g', { id: 'city-base', 'aria-hidden': 'true', 'pointer-events': 'none' });
+    for (const block of level.map.blocks) {
+      cityBase.appendChild(svgEl('rect', { class: 'city-base', x: block.x, y: block.y, width: block.width, height: block.height }));
+    }
+    svg.appendChild(cityBase);
 
     // Avenida con boulevard: dos calzadas negras de la MISMA calle, con su línea
     // discontinua, y una franja verde central cortada en cada cruce.
@@ -5164,11 +5425,13 @@ class UI {
     }
     // La línea cortada va después de todas las calzadas: en los cruces queda arriba
     // del asfalto de la calle que cruza, no debajo.
+    // El muelle no lleva la línea cortada de las calles: en su lugar va un rayado
+    // de tablones, perpendicular al muelle.
     for (const p of coast?.piers || []) {
       const pier = { x1: p.x1, y1: p.y, x2: p.x2, y2: p.y };
       roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': p.streetKey }, pier)));
-      for (const d of centerLineDashes(pier, level.map.cellSize)) {
-        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': p.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+      for (const plank of pierPlanks(pier, level.map.cellSize)) {
+        roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'pier-plank', 'data-street': p.streetKey }, plank)));
       }
     }
     for (const s of enabledRoads) {
@@ -5239,6 +5502,8 @@ class UI {
     svg.appendChild(pitches);
     svg.appendChild(roadsGroup);
     if(level.carEnabled) this.disposeCar=mountCars(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`,level.carCount||1);
+    // El barco va sobre el agua, así que se monta aunque no haya autos.
+    if(level.boatEnabled && coast?.piers?.length) this.disposeBoat=mountBoat(svg,level.map,coast);
 
     // Capa de selección: siempre el último hijo del SVG, así el contorno queda por
     // encima de retícula, calles y casas sin reordenar nada al hacer clic. El clip
@@ -5486,8 +5751,27 @@ class UI {
         card.appendChild(row);
         extra={ row, label, count, add, id: upgrade.extra };
       }
+      let sub=null;
+      if(upgrade.sub) {
+        // Subsección de Puertos: se compra una vez y después es un interruptor.
+        const row=document.createElement('div');
+        row.className='shop-extra shop-sub';
+        const label=document.createElement('span');
+        label.className='shop-extra-label';
+        const help=document.createElement('span');
+        help.className='shop-sub-help';
+        const control=document.createElement('button');
+        control.type='button';
+        control.addEventListener('click',()=>{
+          if(this.game.isUpgradeOwned(upgrade.sub)) this.game.toggleUpgrade(upgrade.sub);
+          else this.game.buyUpgrade(upgrade.sub);
+        });
+        row.append(label,help,control);
+        card.appendChild(row);
+        sub={ row, label, help, control, id: upgrade.sub };
+      }
       (upgrade.id==='football'?document.getElementById('shopPublicSpaces'):host).appendChild(card);
-      return { upgrade, card, title, help, control, extra };
+      return { upgrade, card, title, help, control, extra, sub };
     });
   }
 
@@ -5544,7 +5828,7 @@ class UI {
       card.classList.toggle('is-locked',!unlocked);
     }
     for(const entry of this.upgradeCards||[]) {
-      const { upgrade, card, title, help, control, extra } = entry;
+      const { upgrade, card, title, help, control, extra, sub } = entry;
       if(upgrade.id==='football') {
         title.textContent=t('shop.football');help.textContent=t('shop.footballHelp');
         const owned=g.footballCount>0,on=owned&&g.footballEnabled;
@@ -5577,6 +5861,23 @@ class UI {
         extra.add.disabled=!g.canBuyExtra(extra.id);
         extra.row.classList.toggle('is-full',full);
         extra.row.hidden=!owned;
+      }
+      if(sub) {
+        // Aparece recién con el primer muelle: antes no hay dónde atracar.
+        const hasPier=g.hasPier();
+        const subOwned=g.isUpgradeOwned(sub.id);
+        const subOn=subOwned && g.isUpgradeEnabled(sub.id);
+        sub.row.hidden=!hasPier;
+        sub.label.textContent=t('shop.'+sub.id);
+        sub.help.textContent=t('shop.'+sub.id+'Help');
+        sub.control.className=subOwned?'shop-control shop-switch':'shop-control shop-buy';
+        sub.control.textContent=subOwned?t(subOn?'shop.on':'shop.off'):'\u2212'+g.upgradeCost(sub.id).toLocaleString(locale);
+        sub.control.disabled=!subOwned && !g.canBuyUpgrade(sub.id);
+        sub.control.setAttribute('aria-label',t('shop.'+sub.id));
+        if(subOwned) { sub.control.setAttribute('role','switch'); sub.control.setAttribute('aria-checked',String(subOn)); }
+        else { sub.control.removeAttribute('role'); sub.control.removeAttribute('aria-checked'); }
+        sub.row.classList.toggle('is-owned',subOwned);
+        sub.row.classList.toggle('is-on',subOn);
       }
     }
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
@@ -5770,6 +6071,14 @@ class UI {
         ? t('debug.yes')+' · '+level.avenue.streetKey+' · '+d(level.avenue.orientation==='H'?'horizontal':'vertical')+' · '+Math.round(level.avenue.length)+'u · '+d(level.avenue.reason==='crosses'?'crossesCity':'outerBorder')+' · '+d('graphIntact')
         : t('debug.no')+' · '+d('noAvenue')) : t('debug.no')),
       '',d('coast')+': '+(level.coastSide ? t('coast.'+level.coastSide)+(coastGeometry(level.map,level.coastSide)?.pier ? ' · '+d('pier') : '') : d('none')),
+      // Estado del barco, desglosado: así se ve de una cuál de las tres
+      // condiciones falta cuando no aparece.
+      'BARCO: '+(level.boatEnabled ? 'EN PANTALLA' : 'NO')
+        +' · comprado: '+(this.game.boatUnlocked ? 'sí' : 'no')
+        +' · encendido: '+(this.game.boatEnabled ? 'sí' : 'no')
+        +' · muelles: '+(this.game.pierCount||0)
+        +' · costa: '+(level.coastSide || 'no')
+        +' · en el mapa: '+document.querySelectorAll('.decorative-boat').length,
       '',d('doors')+': '+['N','S','E','W'].map(dir=>t('compass.'+dir)+' '+level.map.houses.filter(h=>h.doorFacing===dir).length).join(' · ')+' · '+d('forced')+' '+level.map.houses.filter(h=>h.frontageCount===1).length+'/'+level.map.houses.length,
       '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];

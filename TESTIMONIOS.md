@@ -23,7 +23,7 @@ Propiedades derivadas: `area`, `widthInCells`, `heightInCells`, `isHorizontal`, 
 | `FACES_PERPENDICULAR_STREET` | Algún frente toca una calle con orientación perpendicular a la resaltada. No afirma que haya un cruce habilitado entre ambas. |
 | `BETWEEN_TWO_STREETS` | Rectángulo completo en la franja cerrada entre dos calles paralelas resaltadas. Se admite tocar sus límites. |
 | `HAS_FREE_ADJACENT_SPACE` | Al menos una celda vacía comparte un lado con la casa, dentro de su propia manzana. No cuenta diagonales ni celdas al otro lado de una calle. |
-| `HAS_MULTIPLE_FREE_SIDES` | Al menos dos lados de la casa tienen celdas libres dentro de su manzana. |
+| `HAS_MULTIPLE_FREE_SIDES` | Al menos dos lados distintos de la casa tienen un lote libre pegado, contando los cuatro: norte, sur, este y oeste. Un lote cuenta sólo si comparte un borde, nunca en diagonal; dos lotes libres sobre el mismo lado cuentan como un solo lado; las calles y todo lo que está fuera de la manzana no son lotes libres. En casas de varios lotes se recorre el perímetro exterior completo. El criterio vive en `freeSpaceAround` (`js/map.js`) y lo usan por igual el generador, el validador y el solver. |
 | `MORE_OPEN_SPACE_THAN_SPEAKER` | Mayor cantidad de esas celdas libres adyacentes que el hablante. |
 | `AND`, `OR` | Exactamente dos condiciones simples; OR inclusivo. La mentira/verdad se evalúa sobre el resultado completo. Sólo desde nivel 8. No se emiten combinaciones equivalentes a uno de sus componentes en esa seed. |
 

@@ -1,4 +1,4 @@
-import { getStreetSegments, phaseForHour, doorRect, centerLineDashes, coastGeometry, avenueGeometry } from './map.js';
+import { getStreetSegments, phaseForHour, doorRect, centerLineDashes, coastGeometry, avenueGeometry, detectPlazas, pierPlanks } from './map.js';
 import { evaluateClue, clueFamily, CLUE_FAMILY_LABELS } from './clues.js';
 import { getConsistentCandidates } from './solver.js';
 import { CONFIG, THEMES } from './config.js';
@@ -8,6 +8,7 @@ import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { houseSizeCounts } from './map.js';
 
 import { mountCars } from './car.js';
+import { mountBoat } from './boat.js';
 import { installBoardControls, boardControlsBlocked } from './board-controls.js';
 import { DAILY_EPOCH, dailyVersionFor, msUntilNextDaily, shiftDateKey } from './daily.js';
 import { onlineEnabled, OnlineClient } from './online.js';
@@ -35,58 +36,10 @@ function svgEl(tag, attrs = {}) {
   return el;
 }
 
-// Decorative only: scan the validated fine lattice without modifying the map.
-export function detectPlazas(map, levelNumber = 1) {
-  const limit=levelNumber>=50?2:1;
-  const span=2, step=map.cellSize, eps=step*1e-6, size=span*step;
-  const cols=Math.round((map.x.at(-1)-map.x[0])/step);
-  const rows=Math.round((map.y.at(-1)-map.y[0])/step);
-  const roads=map.roadSegments.filter(s=>s.enabled);
-  const overlaps=(a,b)=>a.x<b.x+b.width-eps && a.x+a.width>b.x+eps && a.y<b.y+b.height-eps && a.y+a.height>b.y+eps;
-  const validCell=(c,r)=>{
-    const x=map.x[0]+(c+.5)*step,y=map.y[0]+(r+.5)*step;
-    return map.blocks.some(b=>x>b.x-eps && x<b.x+b.width+eps && y>b.y-eps && y<b.y+b.height+eps);
-  };
-  const cells=Array.from({length:rows},(_,r)=>Array.from({length:cols},(_,c)=>validCell(c,r)));
-  const along=(orientation,x,y,sign)=>roads.some(s=>{
-    if(s.orientation!==orientation) return false;
-    const axis=orientation==='H'?s.y1:s.x1,at=orientation==='H'?y:x;
-    const lo=orientation==='H'?Math.min(s.x1,s.x2):Math.min(s.y1,s.y2);
-    const hi=orientation==='H'?Math.max(s.x1,s.x2):Math.max(s.y1,s.y2);
-    const start=orientation==='H'?x:y;
-    return Math.abs(axis-at)<eps && lo<=start+eps && hi>=start-eps && (sign>0?hi>start+eps:lo<start-eps);
-  });
-  const candidates=[];
-  for(let r=0;r<=rows-span;r++) for(let c=0;c<=cols-span;c++) {
-    let valid=true;
-    for(let dy=0;dy<span;dy++) for(let dx=0;dx<span;dx++) if(!cells[r+dy][c+dx]) valid=false;
-    if(!valid) continue;
-    const rect={x:map.x[0]+c*step,y:map.y[0]+r*step,width:size,height:size};
-    if(map.houses.some(h=>overlaps(rect,h.rect))) continue;
-    const right=rect.x+size,bottom=rect.y+size;
-    const crossed=roads.some(s=>s.orientation==='H'
-      ? s.y1>rect.y+eps && s.y1<bottom-eps && Math.max(s.x1,s.x2)>rect.x+eps && Math.min(s.x1,s.x2)<right-eps
-      : s.x1>rect.x+eps && s.x1<right-eps && Math.max(s.y1,s.y2)>rect.y+eps && Math.min(s.y1,s.y2)<bottom-eps);
-    if(crossed) continue;
-    const corners=[[rect.x,rect.y,1,1],[right,rect.y,-1,1],[rect.x,bottom,1,-1],[right,bottom,-1,-1]];
-    const cornerCount=corners.filter(([x,y,h,v])=>along('H',x,y,h)&&along('V',x,y,v)).length;
-    if(cornerCount) candidates.push({...rect,cornerCount});
-  }
-  // Prefer well-defined corners, then proximity to the neighborhood center.
-  const centerX=(map.x[0]+map.x.at(-1))/2,centerY=(map.y[0]+map.y.at(-1))/2;
-  const centerDistance=p=>(p.x+p.width/2-centerX)**2+(p.y+p.height/2-centerY)**2;
-  candidates.sort((a,b)=>b.cornerCount-a.cornerCount || centerDistance(a)-centerDistance(b) || a.y-b.y || a.x-b.x);
-  const plazas=[];
-  for(const candidate of candidates) {
-    if(!plazas.some(p=>overlaps(p,candidate))) plazas.push(candidate);
-    if(plazas.length>=limit) break;
-  }
-  return plazas;
-}
 
 // Orden y agregados de cada mejora. La tienda no sabe nada más que esto.
 const SHOP_UPGRADES = [
-  { id: 'coastal', extra: 'pier' },
+  { id: 'coastal', extra: 'pier', sub: 'boat' },
   { id: 'car', extra: 'car' },
   { id: 'avenue' },
   { id: 'football', extra: 'football' },
@@ -525,6 +478,8 @@ export class UI {
   renderMap(level) {
     this.disposeCar?.();
     this.disposeCar = null;
+    this.disposeBoat?.();
+    this.disposeBoat = null;
     const svg = this.el.board;
     svg.innerHTML = '';
     svg.setAttribute('viewBox', `0 0 ${level.map.width} ${level.map.height}`);
@@ -532,6 +487,14 @@ export class UI {
 
     const defs = svgEl('defs');
     svg.appendChild(defs);
+
+    // El tablero es verde de fondo. La ciudad recupera el suyo con una base por
+    // manzana, así el interior queda como estaba y sólo el exterior es terreno.
+    const cityBase = svgEl('g', { id: 'city-base', 'aria-hidden': 'true', 'pointer-events': 'none' });
+    for (const block of level.map.blocks) {
+      cityBase.appendChild(svgEl('rect', { class: 'city-base', x: block.x, y: block.y, width: block.width, height: block.height }));
+    }
+    svg.appendChild(cityBase);
 
     // Avenida con boulevard: dos calzadas negras de la MISMA calle, con su línea
     // discontinua, y una franja verde central cortada en cada cruce.
@@ -623,11 +586,13 @@ export class UI {
     }
     // La línea cortada va después de todas las calzadas: en los cruces queda arriba
     // del asfalto de la calle que cruza, no debajo.
+    // El muelle no lleva la línea cortada de las calles: en su lugar va un rayado
+    // de tablones, perpendicular al muelle.
     for (const p of coast?.piers || []) {
       const pier = { x1: p.x1, y1: p.y, x2: p.x2, y2: p.y };
       roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': p.streetKey }, pier)));
-      for (const d of centerLineDashes(pier, level.map.cellSize)) {
-        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': p.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+      for (const plank of pierPlanks(pier, level.map.cellSize)) {
+        roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'pier-plank', 'data-street': p.streetKey }, plank)));
       }
     }
     for (const s of enabledRoads) {
@@ -698,6 +663,8 @@ export class UI {
     svg.appendChild(pitches);
     svg.appendChild(roadsGroup);
     if(level.carEnabled) this.disposeCar=mountCars(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`,level.carCount||1);
+    // El barco va sobre el agua, así que se monta aunque no haya autos.
+    if(level.boatEnabled && coast?.piers?.length) this.disposeBoat=mountBoat(svg,level.map,coast);
 
     // Capa de selección: siempre el último hijo del SVG, así el contorno queda por
     // encima de retícula, calles y casas sin reordenar nada al hacer clic. El clip
@@ -945,8 +912,27 @@ export class UI {
         card.appendChild(row);
         extra={ row, label, count, add, id: upgrade.extra };
       }
+      let sub=null;
+      if(upgrade.sub) {
+        // Subsección de Puertos: se compra una vez y después es un interruptor.
+        const row=document.createElement('div');
+        row.className='shop-extra shop-sub';
+        const label=document.createElement('span');
+        label.className='shop-extra-label';
+        const help=document.createElement('span');
+        help.className='shop-sub-help';
+        const control=document.createElement('button');
+        control.type='button';
+        control.addEventListener('click',()=>{
+          if(this.game.isUpgradeOwned(upgrade.sub)) this.game.toggleUpgrade(upgrade.sub);
+          else this.game.buyUpgrade(upgrade.sub);
+        });
+        row.append(label,help,control);
+        card.appendChild(row);
+        sub={ row, label, help, control, id: upgrade.sub };
+      }
       (upgrade.id==='football'?document.getElementById('shopPublicSpaces'):host).appendChild(card);
-      return { upgrade, card, title, help, control, extra };
+      return { upgrade, card, title, help, control, extra, sub };
     });
   }
 
@@ -1003,7 +989,7 @@ export class UI {
       card.classList.toggle('is-locked',!unlocked);
     }
     for(const entry of this.upgradeCards||[]) {
-      const { upgrade, card, title, help, control, extra } = entry;
+      const { upgrade, card, title, help, control, extra, sub } = entry;
       if(upgrade.id==='football') {
         title.textContent=t('shop.football');help.textContent=t('shop.footballHelp');
         const owned=g.footballCount>0,on=owned&&g.footballEnabled;
@@ -1036,6 +1022,23 @@ export class UI {
         extra.add.disabled=!g.canBuyExtra(extra.id);
         extra.row.classList.toggle('is-full',full);
         extra.row.hidden=!owned;
+      }
+      if(sub) {
+        // Aparece recién con el primer muelle: antes no hay dónde atracar.
+        const hasPier=g.hasPier();
+        const subOwned=g.isUpgradeOwned(sub.id);
+        const subOn=subOwned && g.isUpgradeEnabled(sub.id);
+        sub.row.hidden=!hasPier;
+        sub.label.textContent=t('shop.'+sub.id);
+        sub.help.textContent=t('shop.'+sub.id+'Help');
+        sub.control.className=subOwned?'shop-control shop-switch':'shop-control shop-buy';
+        sub.control.textContent=subOwned?t(subOn?'shop.on':'shop.off'):'\u2212'+g.upgradeCost(sub.id).toLocaleString(locale);
+        sub.control.disabled=!subOwned && !g.canBuyUpgrade(sub.id);
+        sub.control.setAttribute('aria-label',t('shop.'+sub.id));
+        if(subOwned) { sub.control.setAttribute('role','switch'); sub.control.setAttribute('aria-checked',String(subOn)); }
+        else { sub.control.removeAttribute('role'); sub.control.removeAttribute('aria-checked'); }
+        sub.row.classList.toggle('is-owned',subOwned);
+        sub.row.classList.toggle('is-on',subOn);
       }
     }
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
@@ -1229,6 +1232,14 @@ export class UI {
         ? t('debug.yes')+' · '+level.avenue.streetKey+' · '+d(level.avenue.orientation==='H'?'horizontal':'vertical')+' · '+Math.round(level.avenue.length)+'u · '+d(level.avenue.reason==='crosses'?'crossesCity':'outerBorder')+' · '+d('graphIntact')
         : t('debug.no')+' · '+d('noAvenue')) : t('debug.no')),
       '',d('coast')+': '+(level.coastSide ? t('coast.'+level.coastSide)+(coastGeometry(level.map,level.coastSide)?.pier ? ' · '+d('pier') : '') : d('none')),
+      // Estado del barco, desglosado: así se ve de una cuál de las tres
+      // condiciones falta cuando no aparece.
+      'BARCO: '+(level.boatEnabled ? 'EN PANTALLA' : 'NO')
+        +' · comprado: '+(this.game.boatUnlocked ? 'sí' : 'no')
+        +' · encendido: '+(this.game.boatEnabled ? 'sí' : 'no')
+        +' · muelles: '+(this.game.pierCount||0)
+        +' · costa: '+(level.coastSide || 'no')
+        +' · en el mapa: '+document.querySelectorAll('.decorative-boat').length,
       '',d('doors')+': '+['N','S','E','W'].map(dir=>t('compass.'+dir)+' '+level.map.houses.filter(h=>h.doorFacing===dir).length).join(' · ')+' · '+d('forced')+' '+level.map.houses.filter(h=>h.frontageCount===1).length+'/'+level.map.houses.length,
       '',d('examples'),...sets.slice(0,6).map((set,i)=>'  '+(i+1)+'. '+set.join(' + ')),'',d('houseInfo'),
     ];

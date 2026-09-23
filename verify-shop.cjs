@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const source=['config','copy','clue-copy','rng','map','clues','solver','generator','game'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
+const source=['config','copy','clue-copy','rng','map','clues','solver','generator','football','game'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const storage=new Map();
 const CONFIG_COST=(api,key)=>api.CONFIG[key];
 class UIStub {
