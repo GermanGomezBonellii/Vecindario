@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f7f7f3">
-  <title>Vecindario</title>
+  <title>VECINDARIO</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <script>
     try {
       const themeAttr={day:'light',night:'dark',sunset:'sunset',forest:'forest',midnight:'midnight',cherry:'cherry'};
@@ -21,12 +22,13 @@
     <header class="topbar">
       <div class="brand-wrap">
         <h1 class="brand" id="brand">VECINDARIO</h1>
+        <button id="menuBtn" class="menu-button" type="button" data-copy="labels.menu" data-copy-aria="aria.menu"></button>
         <span class="seed-label" id="seedLabel" hidden></span>
       </div>
       <div class="statusbar" data-copy-aria="aria.status">
-        <div class="status-item status-level"><span class="status-kicker" data-copy="labels.level"></span><strong id="levelValue">1</strong></div>
+        <div class="status-item status-level"><span class="status-kicker" id="levelKicker" data-copy="labels.level"></span><strong id="levelValue">1</strong></div>
         <div class="status-stats">
-          <div class="status-item"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></div>
+          <button class="status-item score-status" id="scoreStatus" type="button" data-copy-aria="shop.visit" data-copy-title="shop.visit"><span class="status-kicker" data-copy="labels.points"></span><strong id="scoreValue">0</strong></button>
           <div class="status-item"><span class="status-kicker" data-copy="labels.lives"></span><strong id="livesValue">● ● ●</strong></div>
           <button class="status-item time-status theme-toggle" id="timeStatus" type="button" data-copy-aria="aria.night"><span class="status-kicker" data-copy="labels.environment"></span><strong id="timeValue">☼ CLARO</strong></button>
         </div>
@@ -42,7 +44,9 @@
     <main class="layout">
       <section class="board-shell" data-copy-aria="aria.board">
         <div class="board-frame">
-          <svg id="board" class="board" viewBox="0 0 1000 700" role="img" data-copy-aria="aria.map"></svg>
+          <div class="board-stage" id="boardStage">
+            <svg id="board" class="board" viewBox="0 0 1000 700" role="img" data-copy-aria="aria.map"></svg>
+          </div>
           <div class="compass" data-copy-aria="aria.compass">
             <span class="compass-n">N</span>
             <span class="compass-e">E</span>
@@ -91,7 +95,30 @@
       </aside>
     </main>
 
-    <div id="startModal" class="modal-backdrop">
+    <div id="homeModal" class="modal-backdrop">
+      <section class="modal home-modal" role="dialog" aria-modal="true" aria-labelledby="homeTitle">
+        <span class="eyebrow" data-copy="home.eyebrow"></span>
+        <h2 id="homeTitle" data-copy="home.title"></h2>
+        <p data-copy="home.rule"></p>
+        <div class="home-options">
+          <button id="homeDailyBtn" class="home-option home-daily" type="button">
+            <span class="home-kicker" data-copy="home.daily"></span>
+            <strong id="homeDailyDate"></strong>
+            <span class="home-help" data-copy="home.dailyHelp"></span>
+            <span id="homeDailyStatus" class="home-status"></span>
+            <span id="homeCountdown" class="home-countdown" aria-live="off"></span>
+          </button>
+          <button id="homeCampaignBtn" class="home-option" type="button">
+            <span class="home-kicker" data-copy="home.campaign"></span>
+            <strong id="homeCampaignLevel"></strong>
+            <span class="home-help" data-copy="home.campaignHelp"></span>
+          </button>
+        </div>
+        <button id="homeStatsBtn" class="modal-secondary home-stats" type="button" data-copy="home.stats"></button>
+      </section>
+    </div>
+
+    <div id="startModal" class="modal-backdrop" hidden>
       <section class="modal start-modal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
         <span class="eyebrow" id="startLevelLabel"></span>
         <p><strong data-copy="intro.headline"></strong><br><span data-copy="intro.rule"></span></p>
@@ -129,13 +156,18 @@
         <h2 id="endTitle"></h2>
         <p id="endMessage"></p>
         <p id="endReveal" data-copy="defeat.reveal" hidden></p>
+        <div id="endGrade" class="grade-badge" hidden><span class="grade-mark" aria-hidden="true"></span><span class="grade-text"><strong></strong><span></span></span></div>
         <div class="end-stats">
           <div><strong id="endScore">0</strong></div>
           <div><strong id="endQuestions">0</strong></div>
           <div><strong id="endLives">0</strong></div>
         </div>
+        <p id="endMinimum" class="end-note" hidden></p>
         <p id="endSkipNote" class="end-note" data-copy="shop.skip" hidden></p>
+        <p id="endCountdown" class="end-note end-countdown" hidden></p>
         <div class="modal-actions stacked-mobile">
+          <button id="endMenuBtn" class="modal-secondary" type="button" data-copy="daily.menu" hidden></button>
+          <button id="reviewBtn" class="modal-secondary" type="button" data-copy="daily.review" hidden></button>
           <button id="retryBtn" class="modal-secondary" type="button" data-copy="defeat.retry"></button>
           <button id="shopBtn" class="modal-secondary" type="button" data-copy="shop.visit" hidden></button>
           <button id="newGameBtn" class="modal-primary" type="button" data-copy="defeat.next"></button>
@@ -161,34 +193,48 @@
           <span class="eyebrow" data-copy="shop.styles"></span>
           <span class="shop-section-help" data-copy="shop.stylesHelp"></span>
         </div>
-        <div class="shop-items shop-life-shelf">
-          <article class="shop-item shop-life-card" id="shopCoastalCard">
-            <div class="coast-swatch" aria-hidden="true"><span></span></div>
-            <h3 data-copy="shop.coastal"></h3>
-            <p data-copy="shop.coastalHelp"></p>
-            <strong id="shopCoastalState"></strong>
-            <button id="shopCoastalBtn" class="modal-secondary" type="button"></button>
-          </article>
-          <article class="shop-item shop-life-card" id="shopCarCard">
-            <div class="car-swatch" aria-hidden="true"></div>
-            <h3 data-copy="shop.car"></h3>
-            <p data-copy="shop.carHelp"></p>
-            <strong id="shopCarState"></strong>
-            <button id="shopCarBtn" class="modal-secondary" type="button"></button>
-          </article>
-          <article class="shop-item shop-life-card" id="shopAvenueCard">
-            <div class="avenue-swatch" aria-hidden="true"><i></i><b></b><i></i></div>
-            <h3 data-copy="shop.avenue"></h3>
-            <p data-copy="shop.avenueHelp"></p>
-            <strong id="shopAvenueState"></strong>
-            <button id="shopAvenueBtn" class="modal-secondary" type="button"></button>
-          </article>
-        </div>
+        <div class="shop-upgrades" id="shopUpgrades"></div>
         <p id="shopStatus" aria-live="polite"></p>
         <p class="shop-credit" data-copy="shop.credit"></p>
         <div class="modal-actions stacked-mobile">
           <button id="shopBackBtn" class="modal-secondary" type="button" data-copy="shop.back"></button>
           <button id="shopContinueBtn" class="modal-primary" type="button" data-copy="shop.continue"></button>
+        </div>
+      </section>
+    </div>
+
+    <div id="statsModal" class="modal-backdrop" hidden>
+      <section class="modal stats-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+        <span class="eyebrow" id="statsTitle" data-copy="stats.eyebrow"></span>
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="calendar">
+          <div class="calendar-head">
+            <button id="calPrev" class="calendar-nav" type="button" data-copy-aria="stats.prev">‹</button>
+            <strong id="calTitle" aria-live="polite"></strong>
+            <button id="calNext" class="calendar-nav" type="button" data-copy-aria="stats.next">›</button>
+          </div>
+          <div class="calendar-weekdays" id="calWeekdays" aria-hidden="true"></div>
+          <div class="calendar-grid" id="calGrid"></div>
+        </div>
+        <div class="calendar-detail" id="calDetail" aria-live="polite"></div>
+        <div class="leaderboard" id="leaderboard">
+          <div class="leaderboard-head">
+            <span class="eyebrow" data-copy="board.title"></span>
+            <div class="leaderboard-tabs" role="tablist">
+              <button id="boardTodayTab" type="button" role="tab" aria-selected="true" data-copy="board.today"></button>
+              <button id="boardOverallTab" type="button" role="tab" aria-selected="false" data-copy="board.overall"></button>
+            </div>
+          </div>
+          <p id="boardStatus" class="leaderboard-status" aria-live="polite"></p>
+          <ol id="boardList" class="leaderboard-list"></ol>
+          <form id="boardNameForm" class="leaderboard-name" hidden>
+            <label for="boardNameInput" data-copy="board.name"></label>
+            <input id="boardNameInput" type="text" minlength="2" maxlength="20" autocomplete="nickname" spellcheck="false">
+            <button type="submit" class="modal-secondary" data-copy="board.save"></button>
+          </form>
+        </div>
+        <div class="modal-actions">
+          <button id="statsCloseBtn" class="modal-primary" type="button" data-copy="stats.back"></button>
         </div>
       </section>
     </div>

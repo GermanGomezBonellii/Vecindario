@@ -41,7 +41,7 @@ for(const levelNumber of [1,5,12,20])for(let i=0;i<12;i++) {
 assert.equal(avenues.size,2);
 const level=api.generateLevel('car-lifecycle',{levelNumber:5}),svg=new Element();
 const dispose=api.mountCar(svg,level.map,null,'car-lifecycle');
-assert.equal(svg.children.length,1);assert.equal(svg.children[0].children.length,5);assert.equal(svg.children[0].attrs['pointer-events'],'none');assert.equal(callbacks.size,1);
+assert.equal(svg.children.length,1);assert.equal(svg.children[0].children.length,1);assert.equal(svg.children[0].attrs['pointer-events'],'none');assert.equal(callbacks.size,1);
 const tick=now=>{const [id,cb]=callbacks.entries().next().value;callbacks.delete(id);cb(now);};
 const firstTransform=svg.children[0].attrs.transform;
 for(let i=0;i<120;i++)tick(i*16);

@@ -1,13 +1,19 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=['config','copy','clue-copy','rng','map','clues','solver','generator','game'].map(n=>fs.readFileSync(path.join(__dirname,'js',n+'.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/\bexport\s+/g,'')).join('\n');
 const storage=new Map();
+const CONFIG_COST=(api,key)=>api.CONFIG[key];
 class UIStub {
   bind(){} hideEnd(){} renderMap(){} setPrompt(){} refresh(){} hideStartModal(){}
+  slideScene(prepare,done){prepare();done&&done();}
   showShop(show){this.shopVisible=show;}
   reopenEnd(){this.endVisible=true;}
 }
 const context={console,UI:UIStub,AudioManager:class {},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)}};
-const api=vm.runInNewContext(source+'\n({Game,CONFIG,THEMES,THEME_IDS,UNLOCK_NAMESPACE,t,setLanguage})',context);
+const api=vm.runInNewContext(source+'\n({Game,CONFIG,THEMES,THEME_IDS,UNLOCK_NAMESPACE,CAR_COLORS,coastGeometry,t,setLanguage})',context);
+// Estas pruebas describen el juego publicado, así que corren con los atajos de
+// desarrollo apagados. Al final se comprueban los atajos por separado.
+api.CONFIG.DEBUG=false;
+
 const THEME_IDS=[...api.THEME_IDS];
 const PREMIUM=[...api.THEMES].filter(t=>t.cost>0).map(t=>t.id);
 assert.deepEqual(THEME_IDS,['day','night','sunset','forest','midnight','cherry']);
@@ -56,6 +62,28 @@ g.nextLevel();assert.equal(g.score,3350);assert.equal(g.levelNumber,2);
 g.retry();assert.equal(g.score,3350);assert.equal(g.lives,2);
 g.finished=true;g.lastOutcomeWon=true;g.advanceOrNew();assert.equal(g.levelNumber,3);assert.equal(g.score,7050);
 g.finished=true;g.lastOutcomeWon=true;g.openShop();g.nextLevel();assert.equal(g.levelNumber,4);
+
+// Precarga: el barrio siguiente se genera durante la pantalla de victoria y
+// nextLevel lo reutiliza tal cual, sin volver a generarlo ni cambiar la seed.
+const pre=new api.Game({seed:'preload-test'});
+pre.updateUrl=()=>{};
+pre.finished=true;pre.lastOutcomeWon=true;
+pre.prepareNextLevel();
+assert.ok(pre.prepared);assert.equal(pre.prepared.levelNumber,2);
+const preparedSeed=pre.prepared.seed,preparedMap=JSON.stringify(pre.prepared.level.map);
+pre.nextLevel();
+assert.equal(pre.levelNumber,2);assert.equal(pre.seed,preparedSeed);
+assert.equal(JSON.stringify(pre.level.map),preparedMap);
+assert.equal(pre.prepared,null);
+// La cosmética se aplica al mostrar el barrio, así una mejora comprada después
+// de la precarga igual se ve en el barrio que entra.
+pre.finished=true;pre.lastOutcomeWon=true;pre.prepareNextLevel();
+assert.equal(pre.prepared.level.coastSide,undefined);
+pre.score=api.CONFIG.COASTAL_COST;pre.openShop();assert.equal(pre.buyUpgrade('coastal'),true);
+pre.finished=true;pre.lastOutcomeWon=true;pre.nextLevel();
+assert.equal(pre.levelNumber,3);assert.ok(pre.level.coastSide);
+// Este bloque comparte el almacenamiento con el resto del archivo: se deja como estaba.
+storage.delete(api.UNLOCK_NAMESPACE+'coastal');storage.delete('vecindario.style.coastal');storage.delete('vecindario.count.pier');
 
 // Ciudad costera: 20.000, desbloqueo único, y un interruptor que solo se toca en la tienda.
 assert.equal(api.CONFIG.COASTAL_COST,20000);
@@ -204,3 +232,91 @@ for(const lang of ['es','en']) {
   for(const id of THEME_IDS) for(const field of ['name','short','help']) assert(api.t('themes.'+id+'.'+field).length>1);
 }
 console.log('PASS: catalogo de ambientes, precios, topes, desbloqueo unico, persistencia, tienda opcional, avance sin tienda, ciudad costera, avenida con boulevard y ES/EN.');
+
+// --- Autos y puertos: hasta tres de cada uno ---------------------------------
+assert.deepEqual([...api.CAR_COLORS],['red','blue','green'],'el orden de los autos es rojo, azul, verde');
+assert.equal(api.CONFIG.CAR_MAX,3);
+assert.equal(api.CONFIG.PIER_MAX,3);
+storage.clear();
+const fleet=new api.Game({seed:'fleet'});
+fleet.updateUrl=()=>{};
+fleet.finished=true;fleet.lastOutcomeWon=true;fleet.openShop();
+// Sin la mejora base no hay agregados.
+assert.equal(fleet.carCount,0);
+assert.equal(fleet.canBuyExtra('car'),false,'no se compran autos extra sin el primero');
+assert.equal(fleet.canBuyExtra('pier'),false,'no se compran puertos sin el mar');
+fleet.score=CONFIG_COST(api,'CAR_COST');
+assert.equal(fleet.buyCar(),true);
+assert.equal(fleet.carCount,1,'la mejora trae el primer auto');
+// Los dos siguientes se cobran y se topan en tres.
+for(const expected of [2,3]) {
+  fleet.score=api.CONFIG.CAR_EXTRA_COST-1;
+  assert.equal(fleet.canBuyExtra('car'),false,'no alcanza el saldo');
+  fleet.score=api.CONFIG.CAR_EXTRA_COST;
+  assert.equal(fleet.buyExtra('car'),true);
+  assert.equal(fleet.score,0);
+  assert.equal(fleet.carCount,expected);
+}
+fleet.score=99999;
+assert.equal(fleet.canBuyExtra('car'),false,'tope de tres autos');
+assert.equal(fleet.buyExtra('car'),false);
+assert.equal(fleet.carCount,3);
+// Puertos: cuelgan del mar.
+fleet.score=api.CONFIG.COASTAL_COST;
+assert.equal(fleet.buyCoastal(),true);
+assert.equal(fleet.pierCount,1,'el mar trae el primer puerto');
+for(const expected of [2,3]) {
+  fleet.score=api.CONFIG.PIER_COST;
+  assert.equal(fleet.buyExtra('pier'),true);
+  assert.equal(fleet.pierCount,expected);
+}
+fleet.score=99999;
+assert.equal(fleet.buyExtra('pier'),false,'tope de tres puertos');
+// Persisten y se aplican al barrio.
+const reloaded=new api.Game({seed:'fleet-again'});
+assert.equal(reloaded.carCount,3);
+assert.equal(reloaded.pierCount,3);
+reloaded.updateUrl=()=>{};
+reloaded.finished=true;reloaded.lastOutcomeWon=true;reloaded.openShop();
+reloaded.setCoastal(true);reloaded.setCar(true);
+reloaded.loadLevel('fleet-level',{levelNumber:6});
+assert.equal(reloaded.level.carCount,3,'el nivel no recibe la flota');
+assert.equal(reloaded.level.pierCount,3);
+const coast=api.coastGeometry(reloaded.level.map,reloaded.level.coastSide,reloaded.level.pierCount);
+assert.ok(coast.piers.length>=1 && coast.piers.length<=3);
+assert.equal(new Set(coast.piers.map(p=>p.y)).size,coast.piers.length,'dos puertos en la misma calle');
+assert.equal(coast.pier,coast.piers[0]);
+// La avenida sigue esquivando todos los puertos, no solo el primero.
+const excluded=reloaded.avenueExclusions();
+for(const p of coast.piers) assert.ok(excluded.includes(p.streetKey),'la avenida puede caer sobre un puerto');
+console.log('PASS: hasta tres autos en orden y hasta tres puertos, con precios, topes y persistencia.');
+
+// --- Atajos de desarrollo ---------------------------------------------------
+api.CONFIG.DEBUG=true;
+storage.clear();   // cuenta nueva: nada comprado todavía
+const dev=new api.Game({seed:'debug-shortcuts'});
+dev.updateUrl=()=>{};
+assert.equal(dev.score,api.CONFIG.DEBUG_SCORE,'no arranca con los puntos de desarrollo');
+assert.equal(dev.score,100000);
+assert.equal(dev.pendingMode,'assist');
+assert.equal(dev.mode,'assist','no arranca en modo asistencia');
+// La tienda se abre en cualquier momento, sin haber resuelto el caso.
+assert.equal(dev.finished,false);
+assert.equal(dev.canUseShop(),true);
+dev.openShop();
+assert.equal(dev.shopOpen,true,'la tienda no se abre en desarrollo');
+// Y se puede comprar para poder probar cada personalización.
+assert.equal(dev.buyTheme('sunset'),true);
+assert.equal(dev.buyCoastal(),true);
+assert.equal(dev.buyAvenue(),true);
+dev.closeShop();
+assert.equal(dev.shopOpen,false);
+// Con el interruptor apagado vuelve el comportamiento real.
+api.CONFIG.DEBUG=false;
+const real=new api.Game({seed:'debug-off'});
+assert.equal(real.score,api.CONFIG.BASE_SCORE);
+assert.equal(real.mode,'normal');
+assert.equal(real.canUseShop(),false);
+real.openShop();
+assert.equal(real.shopOpen,false,'la tienda no debería abrirse en medio de una partida');
+console.log('PASS: atajos de desarrollo (100.000 puntos, modo asistencia, tienda siempre disponible) y su apagado.');

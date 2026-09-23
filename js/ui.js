@@ -7,7 +7,25 @@ import { renderClue } from './clue-copy.js';
 import { visualClueWarnings, geometricPropertyCounts } from './clues.js';
 import { houseSizeCounts } from './map.js';
 
-import { mountCar } from './car.js';
+import { mountCars } from './car.js';
+import { DAILY_EPOCH, dailyVersionFor, msUntilNextDaily, shiftDateKey } from './daily.js';
+import { onlineEnabled, OnlineClient } from './online.js';
+
+// Marcas de texto de cada calificación: el color nunca va solo.
+const GRADE_MARKS = { gold: '★', green: '+1', blue: '+2', gray: '✓', red: '✕' };
+
+function formatDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+function localeTag() { return getLanguage() === 'es' ? 'es-AR' : 'en-US'; }
+
+// Una fecha 'YYYY-MM-DD' con el formato del idioma, sin que el huso del
+// dispositivo pueda correrla un día.
+function formatDateKey(key, options) {
+  return new Intl.DateTimeFormat(localeTag(), { timeZone: 'UTC', ...options }).format(new Date(`${key}T12:00:00Z`));
+}
 
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs = {}) {
@@ -65,23 +83,355 @@ export function detectPlazas(map, levelNumber = 1) {
   return plazas;
 }
 
+// Orden y agregados de cada mejora. La tienda no sabe nada más que esto.
+const SHOP_UPGRADES = [
+  { id: 'coastal', extra: 'pier' },
+  { id: 'car', extra: 'car' },
+  { id: 'avenue' },
+];
+
 export class UI {
   constructor(game) {
     this.game = game;
     this.el = Object.fromEntries([
-      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
+      'app','board','boardStage','scoreValue','scoreStatus','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopCarCard','shopCarState','shopCarBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopUpgrades','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote',
+      'menuBtn','levelKicker','homeModal','homeDailyBtn','homeDailyDate','homeDailyStatus','homeCountdown','homeCampaignBtn','homeCampaignLevel','homeStatsBtn',
+      'endGrade','endMinimum','endCountdown','endMenuBtn','reviewBtn','statsModal','statsGrid','calPrev','calNext','calTitle','calWeekdays','calGrid','calDetail',
+      'boardTodayTab','boardOverallTab','boardStatus','boardList','boardNameForm','boardNameInput','statsCloseBtn'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
+    this.boardTab = 'today';
     this.syncModalLock();
   }
 
   syncModalLock() {
-    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal,this.el.shopModal].some((el) => el && !el.hidden);
+    const anyOpen = [this.el.homeModal, this.el.startModal, this.el.accuseModal, this.el.endModal, this.el.shopModal, this.el.statsModal].some((el) => el && !el.hidden);
     document.body.classList.toggle('modal-open', anyOpen);
+  }
+
+  // --- Pantalla inicial -------------------------------------------------------
+
+  showHome() {
+    if (!this.el.homeModal) return;
+    this.el.homeModal.hidden = false;
+    this.renderHome();
+    this.startCountdown();
+    this.syncModalLock();
+  }
+
+  hideHome() {
+    if (!this.el.homeModal) return;
+    this.el.homeModal.hidden = true;
+    this.syncModalLock();
+  }
+
+  renderHome() {
+    if (!this.el.homeModal || this.el.homeModal.hidden) return;
+    const g = this.game;
+    const today = g.todayKey();
+    this.homeDate = today;
+    this.el.homeDailyDate.textContent = formatDateKey(today, { weekday: 'long', day: 'numeric', month: 'long' });
+    const record = g.dailyRecord(today);
+    const result = record?.status === 'finished' ? record.result : null;
+    this.el.homeDailyStatus.textContent = result
+      ? (result.won ? t('home.statusWon', { grade: t('grades.' + result.grade + '.name') }) : t('home.statusLost'))
+      : t(record?.log?.length ? 'home.statusPlaying' : 'home.statusNew');
+    this.el.homeDailyBtn.dataset.grade = result?.grade || '';
+    this.el.homeCampaignLevel.textContent = g.campaignStarted
+      ? t('home.campaignResume', { n: g.isDaily ? g.campaignSession?.levelNumber : g.levelNumber })
+      : t('home.campaignLevel', { n: g.isDaily ? g.campaignSession?.levelNumber ?? 1 : g.levelNumber });
+    this.tickCountdown();
+  }
+
+  // Un solo reloj para la pantalla inicial y el cierre del caso diario. Cuando
+  // cambia la fecha, la pantalla inicial pasa sola al misterio nuevo.
+  startCountdown() {
+    if (this.countdownTimer || typeof setInterval !== 'function') return;
+    this.countdownTimer = setInterval(() => this.tickCountdown(), 1000);
+  }
+
+  tickCountdown() {
+    const text = t('home.next', { time: formatDuration(msUntilNextDaily(new Date())) });
+    if (this.el.homeCountdown) this.el.homeCountdown.textContent = text;
+    if (this.el.endCountdown && !this.el.endCountdown.hidden) this.el.endCountdown.textContent = text;
+    if (this.el.homeModal && !this.el.homeModal.hidden && this.homeDate && this.homeDate !== this.game.todayKey()) this.renderHome();
+    if (this.el.statsModal && !this.el.statsModal.hidden && this.statsToday && this.statsToday !== this.game.todayKey()) this.refreshInvestigations();
+  }
+
+  // --- Cierre del caso diario -------------------------------------------------
+
+  showDailyEnd(result) {
+    if (!result) return;
+    this.endResult = { daily: result };
+    this.el.endModal.hidden = false;
+    this.syncModalLock();
+    this.el.endEyebrow.hidden = false;
+    this.el.endEyebrow.textContent = (result.practice ? t('daily.practiceBadge') : t('daily.badge')) + ' · ' + formatDateKey(result.date, { day: 'numeric', month: 'long' });
+    this.el.endTitle.textContent = t(result.won ? 'daily.solved' : 'daily.unsolved');
+    document.getElementById('endMessage').textContent = t(result.won ? 'daily.solvedText' : 'daily.unsolvedText');
+    document.getElementById('endReveal').hidden = result.won;
+    this.renderGradeBadge(this.el.endGrade, result.grade);
+    this.el.endGrade.hidden = false;
+    this.el.endScore.textContent = formatCount(Math.max(0, result.points), 'point');
+    this.el.endQuestions.textContent = formatCount(result.questions, 'question');
+    this.el.endLives.textContent = formatCount(result.lives, 'life');
+    this.el.endMinimum.hidden = false;
+    this.el.endMinimum.textContent = t('daily.minimum', { n: result.minimum }) + ' ' + t(result.practice ? 'daily.practice' : 'daily.official');
+    this.el.endSkipNote.hidden = true;
+    this.el.endCountdown.hidden = false;
+    this.tickCountdown();
+    this.startCountdown();
+    this.el.shopBtn.hidden = true;
+    this.el.endMenuBtn.hidden = false;
+    this.el.reviewBtn.hidden = false;
+    this.el.retryBtn.textContent = t('daily.retry');
+    this.el.newGameBtn.textContent = t('daily.investigations');
+  }
+
+  renderGradeBadge(host, grade) {
+    if (!host) return;
+    host.dataset.grade = grade || '';
+    host.querySelector('.grade-mark').textContent = GRADE_MARKS[grade] || '';
+    host.querySelector('.grade-text strong').textContent = grade ? t('grades.' + grade + '.name') : '';
+    host.querySelector('.grade-text span').textContent = grade ? t('grades.' + grade + '.text') : '';
+  }
+
+  // --- Mis investigaciones ----------------------------------------------------
+
+  showInvestigations(from = null) {
+    const g = this.game;
+    this.statsReturn = from || (!this.el.homeModal.hidden ? 'home' : !this.el.endModal.hidden ? 'end' : null);
+    this.el.homeModal.hidden = true;
+    this.el.endModal.hidden = true;
+    const today = g.todayKey();
+    this.calendarMonth = today.slice(0, 7);
+    this.selectedDate = today;
+    this.el.statsModal.hidden = false;
+    this.syncModalLock();
+    this.refreshInvestigations();
+    g.retryPendingSubmissions?.();
+    this.loadLeaderboard();
+  }
+
+  hideInvestigations() {
+    this.el.statsModal.hidden = true;
+    if (this.statsReturn === 'home') this.showHome();
+    else if (this.statsReturn === 'end' && this.endResult) this.reopenEnd();
+    this.statsReturn = null;
+    this.syncModalLock();
+  }
+
+  refreshInvestigations() {
+    if (!this.el.statsModal || this.el.statsModal.hidden) return;
+    this.statsToday = this.game.todayKey();
+    this.renderStats();
+    this.renderCalendar();
+    this.renderCalendarDetail();
+    this.renderLeaderboard();
+  }
+
+  renderStats() {
+    const s = this.game.dailyStats();
+    const locale = localeTag();
+    const tiles = [['played', s.played], ['solved', s.solved], ['streak', s.currentStreak], ['best', s.bestStreak], ['gold', s.gold], ['points', s.points]];
+    this.el.statsGrid.replaceChildren(...tiles.map(([key, value]) => {
+      const tile = document.createElement('div');
+      tile.className = 'stats-tile';
+      const v = document.createElement('strong');
+      v.textContent = Number(value).toLocaleString(locale);
+      const label = document.createElement('span');
+      label.textContent = t('stats.' + key);
+      tile.append(v, label);
+      return tile;
+    }));
+  }
+
+  renderCalendar() {
+    const g = this.game;
+    const today = this.statsToday;
+    const [year, month] = this.calendarMonth.split('-').map(Number);
+    const first = `${this.calendarMonth}-01`;
+    this.el.calTitle.textContent = formatDateKey(first, { month: 'long', year: 'numeric' });
+    this.el.calPrev.disabled = first <= DAILY_EPOCH;
+    this.el.calNext.disabled = shiftDateKey(first, 32).slice(0, 7) > today.slice(0, 7);
+    // Semana de lunes a domingo, en los dos idiomas.
+    const monday = '2026-01-05';
+    this.el.calWeekdays.replaceChildren(...Array.from({ length: 7 }, (_, i) => {
+      const cell = document.createElement('span');
+      cell.textContent = formatDateKey(shiftDateKey(monday, i), { weekday: 'narrow' });
+      return cell;
+    }));
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const offset = (new Date(`${first}T12:00:00Z`).getUTCDay() + 6) % 7;
+    const records = new Map(g.dailyRecords().map((r) => [r.date, r]));
+    const cells = [];
+    for (let i = 0; i < offset; i += 1) {
+      const pad = document.createElement('span');
+      pad.className = 'calendar-pad';
+      pad.setAttribute('aria-hidden', 'true');
+      cells.push(pad);
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const key = `${this.calendarMonth}-${String(day).padStart(2, '0')}`;
+      const record = records.get(key);
+      const grade = record?.status === 'finished' ? record.result?.grade : null;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'calendar-day';
+      btn.dataset.date = key;
+      if (grade) btn.dataset.grade = grade;
+      else if (record?.log?.length) btn.dataset.state = 'playing';
+      btn.classList.toggle('is-today', key === today);
+      btn.classList.toggle('is-selected', key === this.selectedDate);
+      const locked = key > today || !dailyVersionFor(key);
+      btn.disabled = locked;
+      const num = document.createElement('span');
+      num.className = 'calendar-num';
+      num.textContent = String(day);
+      const mark = document.createElement('span');
+      mark.className = 'calendar-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = grade ? GRADE_MARKS[grade] : '';
+      btn.append(num, mark);
+      const label = formatDateKey(key, { weekday: 'long', day: 'numeric', month: 'long' });
+      btn.setAttribute('aria-label', grade ? `${label}: ${t('grades.' + grade + '.name')}` : label);
+      btn.setAttribute('aria-pressed', String(key === this.selectedDate));
+      btn.addEventListener('click', () => { this.selectedDate = key; this.renderCalendar(); this.renderCalendarDetail(); });
+      cells.push(btn);
+    }
+    this.el.calGrid.replaceChildren(...cells);
+  }
+
+  shiftCalendar(delta) {
+    const [y, m] = this.calendarMonth.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    this.calendarMonth = d.toISOString().slice(0, 7);
+    this.renderCalendar();
+  }
+
+  renderCalendarDetail() {
+    const g = this.game;
+    const key = this.selectedDate;
+    const today = this.statsToday;
+    const host = this.el.calDetail;
+    const title = document.createElement('strong');
+    title.className = 'detail-date';
+    title.textContent = (key === today ? t('stats.today') + ' · ' : '') + formatDateKey(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const nodes = [title];
+    const text = (content, cls = 'detail-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = content; nodes.push(p); return p; };
+    const action = (label, fn, primary = false) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = primary ? 'modal-primary' : 'modal-secondary';
+      b.textContent = label;
+      b.addEventListener('click', () => { this.el.statsModal.hidden = true; this.statsReturn = null; this.syncModalLock(); fn(); });
+      return b;
+    };
+    const actions = document.createElement('div');
+    actions.className = 'detail-actions';
+    const record = g.dailyRecord(key);
+    const result = record?.status === 'finished' ? record.result : null;
+    if (key > today) text(t('stats.future'));
+    else if (!dailyVersionFor(key)) text(t('stats.before'));
+    else if (result) {
+      const badge = document.createElement('div');
+      badge.className = 'grade-badge';
+      badge.innerHTML = '<span class="grade-mark" aria-hidden="true"></span><span class="grade-text"><strong></strong><span></span></span>';
+      this.renderGradeBadge(badge, result.grade);
+      nodes.push(badge);
+      const dl = document.createElement('dl');
+      dl.className = 'detail-stats';
+      for (const [label, value] of [['score', formatCount(result.points, 'point')], ['questions', result.questions], ['minimum', result.minimum], ['lives', result.lives]]) {
+        const dt = document.createElement('dt'); dt.textContent = t('stats.' + label);
+        const dd = document.createElement('dd'); dd.textContent = String(value);
+        dl.append(dt, dd);
+      }
+      nodes.push(dl);
+      if (result.hintUsed) text(t('stats.hint'));
+      if (result.wrongAccusations) text(t('stats.wrong', { n: result.wrongAccusations }));
+      if (result.won && !result.deduced) text(t('stats.guessed'));
+      if (onlineEnabled() && record.submission) text(t('board.' + (record.submission.status === 'accepted' ? 'accepted' : record.submission.status === 'rejected' ? 'rejected' : 'pending')));
+      actions.append(action(t('stats.review'), () => g.openDaily(key)), action(t('stats.practice'), () => g.openDaily(key, { practice: true })));
+    } else if (key === today) {
+      text(t(record?.log?.length ? 'stats.inProgress' : 'stats.unplayed'));
+      actions.append(action(t(record?.log?.length ? 'stats.resume' : 'stats.play'), () => g.openDaily(key), true));
+    } else {
+      text(t('stats.unplayedPast'));
+      actions.append(action(t('stats.practice'), () => g.openDaily(key, { practice: true })));
+    }
+    if (actions.childElementCount) nodes.push(actions);
+    host.replaceChildren(...nodes);
+  }
+
+  // Sin servidor configurado no se muestra ninguna tabla, ni siquiera de ejemplo.
+  renderLeaderboard() {
+    const online = onlineEnabled();
+    this.el.boardTodayTab.setAttribute('aria-selected', String(this.boardTab === 'today'));
+    this.el.boardOverallTab.setAttribute('aria-selected', String(this.boardTab === 'overall'));
+    this.el.boardTodayTab.disabled = !online;
+    this.el.boardOverallTab.disabled = !online;
+    this.el.boardNameForm.hidden = !online;
+    if (!online) {
+      this.el.boardStatus.textContent = t('board.offline');
+      this.el.boardList.replaceChildren();
+      return;
+    }
+    const state = this.boardState || { status: 'loading' };
+    const rows = state[this.boardTab] || [];
+    const mine = state.mine?.[this.boardTab] || null;
+    this.el.boardStatus.textContent = state.status === 'loading' ? t('board.loading') : state.status === 'error' ? t('board.error') : rows.length ? '' : t('board.empty');
+    const me = this.online?.userId;
+    const locale = localeTag();
+    const item = (row) => {
+      const li = document.createElement('li');
+      li.className = 'leaderboard-row';
+      li.classList.toggle('is-me', row.user_id === me);
+      const pos = document.createElement('span'); pos.className = 'leaderboard-pos'; pos.textContent = String(row.position);
+      const name = document.createElement('span'); name.className = 'leaderboard-name-cell';
+      name.textContent = (row.display_name || t('board.anonymous')) + (row.user_id === me ? ` (${t('board.you')})` : '');
+      const pts = document.createElement('span'); pts.className = 'leaderboard-points'; pts.textContent = Number(row.points).toLocaleString(locale);
+      li.append(pos, name, pts);
+      return li;
+    };
+    const list = rows.map(item);
+    if (mine && !rows.some((r) => r.user_id === mine.user_id)) {
+      const gap = document.createElement('li'); gap.className = 'leaderboard-gap'; gap.textContent = '…'; gap.setAttribute('aria-hidden', 'true');
+      list.push(gap, item(mine));
+    }
+    this.el.boardList.replaceChildren(...list);
+  }
+
+  async loadLeaderboard() {
+    if (!onlineEnabled()) { this.renderLeaderboard(); return; }
+    this.online ??= this.game.online || (this.game.online = new OnlineClient());
+    this.boardState = { status: 'loading' };
+    this.renderLeaderboard();
+    try {
+      const date = this.game.todayKey();
+      const [today, overall, mine, profile] = await Promise.all([this.online.todayBoard(date), this.online.overallBoard(), this.online.myRows(date), this.online.profile()]);
+      this.boardState = { status: 'ready', today: today || [], overall: overall || [], mine };
+      if (profile?.display_name && document.activeElement !== this.el.boardNameInput) this.el.boardNameInput.value = profile.display_name;
+    } catch (error) {
+      console.warn(error);
+      this.boardState = { status: 'error' };
+    }
+    this.renderLeaderboard();
+  }
+
+  async saveBoardName() {
+    const name = this.el.boardNameInput.value.trim();
+    if (name.length < 2 || name.length > 20) { this.el.boardStatus.textContent = t('board.nameInvalid'); return; }
+    try {
+      await this.online.setName(name);
+      await this.loadLeaderboard();
+      this.el.boardStatus.textContent = t('board.nameSaved');
+    } catch (error) {
+      this.el.boardStatus.textContent = error.message || t('board.error');
+    }
   }
 
   hideStartModal() {
@@ -109,6 +459,8 @@ export class UI {
     applyCopy(document);
     document.documentElement.lang=getLanguage();
     document.querySelectorAll('[data-language]').forEach(btn=>btn.addEventListener('click',()=>this.changeLanguage(btn.dataset.language)));
+    // En modo desarrollo arranca preseleccionado el modo que pide la configuración.
+    document.querySelectorAll('.mode-option').forEach((btn) => btn.classList.toggle('is-selected', btn.dataset.mode === this.game.pendingMode));
     document.querySelectorAll('.mode-option').forEach((btn) => btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-option').forEach((b) => b.classList.toggle('is-selected', b === btn));
       this.game.pendingMode = btn.dataset.mode;
@@ -126,30 +478,32 @@ export class UI {
     this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
     this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
     this.el.shopBackBtn.addEventListener('click',()=>this.game.closeShop());
-    this.el.shopCoastalBtn.addEventListener('click',()=>{
-      if(this.game.coastalUnlocked) this.game.toggleCoastal();
-      else this.game.buyCoastal();
-    });
-    this.el.shopCarBtn.addEventListener('click',()=>{
-      if(this.game.carUnlocked) this.game.toggleCar();
-      else this.game.buyCar();
-    });
-    this.el.shopAvenueBtn.addEventListener('click',()=>{
-      if(this.game.avenueUnlocked) this.game.toggleAvenue();
-      else this.game.buyAvenue();
-    });
-    this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
+    this.buildUpgrades();
     this.buildThemeShelf();
     // Un solo panel, dos disparadores: el de la barra en desktop y el del panel en mobile.
     this.logicToggles = [...document.querySelectorAll('[data-logic-toggle]')];
     for (const btn of this.logicToggles) btn.addEventListener('click', () => this.toggleLogicPanel());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
+    // Atajo de desarrollo: el bloque de puntos abre la tienda.
+    this.el.scoreStatus.addEventListener('click', () => this.game.openShop());
     this.el.retryBtn.addEventListener('click', () => this.game.retry());
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
     this.el.debug100.addEventListener('click', () => this.game.runBatchDebug());
     this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
     this.el.debugResetUnlocks.addEventListener('click', () => this.game.resetUnlocks());
     this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
+    this.el.menuBtn?.addEventListener('click', () => this.game.goHome());
+    this.el.homeDailyBtn?.addEventListener('click', () => this.game.openDaily());
+    this.el.homeCampaignBtn?.addEventListener('click', () => this.game.openCampaign());
+    this.el.homeStatsBtn?.addEventListener('click', () => this.game.openInvestigations('home'));
+    this.el.endMenuBtn?.addEventListener('click', () => this.game.goHome());
+    this.el.reviewBtn?.addEventListener('click', () => this.game.reviewDaily());
+    this.el.statsCloseBtn?.addEventListener('click', () => this.hideInvestigations());
+    this.el.calPrev?.addEventListener('click', () => this.shiftCalendar(-1));
+    this.el.calNext?.addEventListener('click', () => this.shiftCalendar(1));
+    this.el.boardTodayTab?.addEventListener('click', () => { this.boardTab = 'today'; this.renderLeaderboard(); });
+    this.el.boardOverallTab?.addEventListener('click', () => { this.boardTab = 'overall'; this.renderLeaderboard(); });
+    this.el.boardNameForm?.addEventListener('submit', (e) => { e.preventDefault(); this.saveBoardName(); });
 
     this.el.board.addEventListener('pointerup', (e) => {
       const house = e.target.closest?.('.house');
@@ -160,7 +514,8 @@ export class UI {
   }
 
   toggleLogicPanel(force = null) {
-    const shouldOpen = force == null ? this.el.debugPanel.hidden : Boolean(force);
+    // El diario es competitivo: el panel con la solución no se abre.
+    const shouldOpen = !this.game.isDaily && (force == null ? this.el.debugPanel.hidden : Boolean(force));
     this.el.debugPanel.hidden = !shouldOpen;
     for (const btn of this.logicToggles || [this.el.logicToggle]) {
       btn.setAttribute('aria-expanded', String(shouldOpen));
@@ -186,20 +541,51 @@ export class UI {
 
     // Ciudad costera: dos rectángulos detrás del barrio. No captura clics y no
     // participa de la geometría; el oleaje es una sola animación CSS.
-    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide) : null;
+    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide, level.pierCount || 1) : null;
     // La brújula se corre al lado de tierra para no quedar flotando en el agua.
     if (this.el.app) this.el.app.dataset.coast = coast ? coast.side : '';
     if (coast) {
       const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
+
+      // Textura del mar: franjas lisas paralelas a la orilla que avanzan hacia ella.
+      // Sin degradés: cada franja es un rectángulo de color plano. El patrón se
+      // extiende un período más allá del borde exterior y se desplaza exactamente un
+      // período, así el bucle es continuo y no aparece ninguna costura.
+      const clip = svgEl('clipPath', { id: 'sea-clip', clipPathUnits: 'userSpaceOnUse' });
+      clip.appendChild(svgEl('rect', Object.assign({}, coast.water)));
+      defs.appendChild(clip);
+      const toShore = coast.side === 'left' ? 1 : -1;
+      const outer = coast.side === 'left' ? coast.water.x : coast.water.x + coast.water.width;
+      const texture = svgEl('g', { class: 'sea-texture', 'clip-path': 'url(#sea-clip)' });
+      // Cada capa repite un motivo de bandas anchas y desiguales dentro de su
+      // período. El patrón sigue siendo periódico, así que el desplazamiento de un
+      // período exacto mantiene el bucle sin costura, pero ya no se lee como rayas
+      // regulares. Los dos períodos son casi coprimos: el cruce de ambas capas rompe
+      // la repetición a la vista.
+      for (const [cls, period, motif, duration] of [
+        // Las duraciones salen del período: 132u/50s ≈ 2,6 u/s. La capa de fondo va
+        // bastante más despacio, que es lo que da la sensación de profundidad. Ambas
+        // se alargaron en la misma proporción, así el cruce entre capas no cambia.
+        ['sea-band sea-band-near', 132, [[0, 48], [78, 24]], '50s'],
+        ['sea-band sea-band-far', 208, [[0, 34], [104, 62]], '120s'],
+      ]) {
+        const layer = svgEl('g', { class: cls, style: `--sea-shift:${toShore * period}px;--sea-duration:${duration}` });
+        const steps = Math.ceil(coast.water.width / period) + 2;
+        for (let i = 0; i < steps; i += 1) {
+          for (const [offset, band] of motif) {
+            const from = outer + toShore * (i * period - period + offset);
+            layer.appendChild(svgEl('rect', {
+              x: toShore > 0 ? from : from - band, y: coast.water.y,
+              width: band, height: coast.water.height,
+            }));
+          }
+        }
+        texture.appendChild(layer);
+      }
+      sea.appendChild(texture);
+
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
-      // The outer water extends beyond the viewport; animate a subtle visible
-      // edge inside the crop using the same lightweight tide as the shore.
-      const edgeWidth=3;
-      sea.appendChild(svgEl('rect', {
-        class:'sea-foam sea-outer', x:coast.side==='left'?0:level.map.width-edgeWidth,
-        y:coast.water.y, width:edgeWidth, height:coast.water.height,
-      }));
       svg.appendChild(sea);
     }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
@@ -239,11 +625,11 @@ export class UI {
     }
     // La línea cortada va después de todas las calzadas: en los cruces queda arriba
     // del asfalto de la calle que cruza, no debajo.
-    if (coast?.pier) {
-      const pier = { x1: coast.pier.x1, y1: coast.pier.y, x2: coast.pier.x2, y2: coast.pier.y };
-      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': coast.pier.streetKey }, pier)));
+    for (const p of coast?.piers || []) {
+      const pier = { x1: p.x1, y1: p.y, x2: p.x2, y2: p.y };
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': p.streetKey }, pier)));
       for (const d of centerLineDashes(pier, level.map.cellSize)) {
-        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': coast.pier.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': p.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
       }
     }
     for (const s of enabledRoads) {
@@ -302,7 +688,107 @@ export class UI {
     }
     svg.appendChild(plazasGroup);
     svg.appendChild(roadsGroup);
-    if(level.carEnabled) this.disposeCar=mountCar(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`);
+    if(level.carEnabled) this.disposeCar=mountCars(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`,level.carCount||1);
+
+    // Capa de selección: siempre el último hijo del SVG, así el contorno queda por
+    // encima de retícula, calles y casas sin reordenar nada al hacer clic. El clip
+    // la recorta al rectángulo de la casa, de modo que el trazo sigue el perímetro
+    // exterior exacto (1 a 4 lotes) sin invadir la calle.
+    const selClip = svgEl('clipPath', { id: 'selection-clip', clipPathUnits: 'userSpaceOnUse' });
+    const selClipRect = svgEl('rect', { x: 0, y: 0, width: 0, height: 0 });
+    selClip.appendChild(selClipRect);
+    defs.appendChild(selClip);
+    const selection = svgEl('g', { class: 'selection-layer', 'clip-path': 'url(#selection-clip)', 'pointer-events': 'none', 'aria-hidden': 'true' });
+    const halo = svgEl('rect', { class: 'selection-halo', x: 0, y: 0, width: 0, height: 0 });
+    const edge = svgEl('rect', { class: 'selection-edge', x: 0, y: 0, width: 0, height: 0 });
+    selection.appendChild(halo);
+    selection.appendChild(edge);
+    selection.setAttribute('hidden', 'hidden');
+    svg.appendChild(selection);
+    this.selectionLayer = selection;
+    this.selectionRects = [selClipRect, halo, edge];
+  }
+
+  // Una sola capa reutilizada: sólo se mueven cuatro atributos por selección.
+  updateSelectionOutline() {
+    const layer = this.selectionLayer;
+    if (!layer || !this.selectionRects) return;
+    const house = this.game.selectedHouse;
+    if (!house) { layer.setAttribute('hidden', 'hidden'); return; }
+    const r = house.rect;
+    for (const rect of this.selectionRects) {
+      rect.setAttribute('x', r.x);
+      rect.setAttribute('y', r.y);
+      rect.setAttribute('width', r.width);
+      rect.setAttribute('height', r.height);
+    }
+    layer.removeAttribute('hidden');
+  }
+
+  // Transición horizontal entre barrios: dos escenas completas y un único
+  // transform sobre el contenedor. No se anima ninguna casa por separado.
+  slideScene(prepare, done) {
+    const stage = this.el.boardStage;
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!stage || reduce || this.sliding) {
+      prepare();
+      // Sin animación el bloqueo se sostiene un instante igual: un doble toque
+      // accidental en SIGUIENTE BARRIO no debe saltearse un barrio.
+      setTimeout(() => done?.(), 350);
+      return;
+    }
+    this.sliding = true;
+    const outgoing = this.el.board.cloneNode(true);
+    outgoing.removeAttribute('id');
+    outgoing.setAttribute('aria-hidden', 'true');
+    // Los dos SVG conviven mientras dura la transición: se renombran los id del
+    // clon para que los clip-path de la escena nueva no queden apuntando a él.
+    for (const node of outgoing.querySelectorAll('[id]')) node.id = `ghost-${node.id}`;
+    for (const node of outgoing.querySelectorAll('[clip-path]')) {
+      node.setAttribute('clip-path', node.getAttribute('clip-path').replace(/url\(#/g, 'url(#ghost-'));
+    }
+    // Un clon reinicia sus animaciones CSS, así que el oleaje saltaría al comienzo
+    // del ciclo justo al empezar la transición. Se copia el transform que tenía en
+    // ese instante y se corta la animación: el mar saliente queda exactamente donde
+    // estaba y se va de cuadro con su escena.
+    const liveWaves = this.el.board.querySelectorAll('.sea-band, .sea-foam');
+    const ghostWaves = outgoing.querySelectorAll('.sea-band, .sea-foam');
+    liveWaves.forEach((node, i) => {
+      const ghost = ghostWaves[i];
+      if (!ghost) return;
+      const frozen = window.getComputedStyle(node).transform;
+      ghost.style.animation = 'none';
+      if (frozen && frozen !== 'none') ghost.style.transform = frozen;
+    });
+    stage.insertBefore(outgoing, this.el.board);
+    prepare();
+    // Entre las dos escenas va una franja que continúa el borde por el que sale la
+    // ciudad saliente: agua si su costa da a la derecha, fondo del tablero si no.
+    const seam = document.createElement('div');
+    seam.className = 'scene-seam';
+    seam.setAttribute('aria-hidden', 'true');
+    if (outgoing.querySelector('.sea')?.getAttribute('data-side') === 'right') seam.dataset.fill = 'sea';
+    stage.insertBefore(seam, this.el.board);
+    // El desplazamiento vive en CSS (un ancho de tablero más la separación entre
+    // escenas), así no hay dos números que mantener sincronizados.
+    stage.classList.add('is-sliding');
+    void stage.offsetWidth;
+    stage.classList.add('is-shifted');
+    let timer = 0;
+    const finish = () => {
+      if (!this.sliding) return;
+      stage.removeEventListener('transitionend', onEnd);
+      clearTimeout(timer);
+      stage.classList.remove('is-sliding');
+      stage.classList.remove('is-shifted');
+      outgoing.remove();
+      seam.remove();
+      this.sliding = false;
+      done?.();
+    };
+    const onEnd = (e) => { if (e.target === stage) finish(); };
+    stage.addEventListener('transitionend', onEnd);
+    timer = setTimeout(finish, 1400);
   }
 
   getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
@@ -310,6 +796,7 @@ export class UI {
   refresh() {
     const g = this.game;
     this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.scoreStatus.disabled = !g.canUseShop() || g.shopOpen;
     this.el.livesValue.replaceChildren(...Array.from({length:CONFIG.STARTING_LIVES},(_,i)=>{
       const dot=document.createElement('span');
       dot.className='life-dot '+(i<g.lives?'life-active':'life-empty')+(g.losingLife && i===g.lives-1?' life-losing':'');
@@ -319,10 +806,22 @@ export class UI {
     }));
     this.el.livesValue.setAttribute('aria-label',formatCount(g.lives,'life'));
     this.el.livesValue.setAttribute('aria-live','polite');
-    this.el.levelValue.textContent = String(g.levelNumber);
+    // En el diario el número de nivel no se muestra: en su lugar va la fecha.
+    if (g.isDaily && g.daily) {
+      if (this.el.levelKicker) this.el.levelKicker.textContent = t('labels.daily');
+      this.el.levelValue.textContent = formatDateKey(g.daily.date, { day: '2-digit', month: '2-digit' });
+      this.el.modeBadge.textContent = t(g.daily.practice ? 'daily.practiceBadge' : 'daily.badge');
+    } else {
+      if (this.el.levelKicker) this.el.levelKicker.textContent = t('labels.level');
+      this.el.levelValue.textContent = String(g.levelNumber);
+      this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
+    }
+    this.el.app.dataset.context = g.isDaily ? 'daily' : 'campaign';
+    for (const btn of this.logicToggles || []) btn.hidden = Boolean(g.isDaily);
+    if (g.isDaily && this.el.debugPanel && !this.el.debugPanel.hidden) this.toggleLogicPanel(false);
+    if (this.el.buyLifeBtn) this.el.buyLifeBtn.hidden = Boolean(g.isDaily);
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
-    this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed && !g.shopOpen) {
@@ -364,6 +863,8 @@ export class UI {
       if (sleep) sleep.style.display = unavailable ? '' : 'none';
     }
 
+    this.updateSelectionOutline();
+
     const selected = g.selectedHouse;
     const has = Boolean(selected);
     const unavailable = has && g.level.timed && g.currentHour >= selected.availableUntil && !selected.asked;
@@ -386,6 +887,57 @@ export class UI {
   }
 
   showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
+
+  // Una tarjeta por mejora, todas iguales: ícono, nombre, una línea de ayuda y un
+  // control a la derecha (comprar si está bloqueada, ON/OFF si ya es tuya). Los
+  // agregados —autos y puertos— cuelgan de su tarjeta, no son tarjetas aparte.
+  buildUpgrades() {
+    const host=this.el.shopUpgrades;
+    if(!host) return;
+    host.innerHTML='';
+    this.upgradeCards=SHOP_UPGRADES.map(upgrade=>{
+      const card=document.createElement('article');
+      card.className='shop-card';
+      card.dataset.upgrade=upgrade.id;
+      const head=document.createElement('div');
+      head.className='shop-card-head';
+      const icon=document.createElement('span');
+      icon.className='shop-card-icon';
+      icon.dataset.icon=upgrade.id;
+      icon.setAttribute('aria-hidden','true');
+      const text=document.createElement('div');
+      text.className='shop-card-text';
+      const title=document.createElement('h3');
+      const help=document.createElement('p');
+      text.append(title,help);
+      const control=document.createElement('button');
+      control.type='button';
+      control.addEventListener('click',()=>{
+        if(this.game.isUpgradeOwned(upgrade.id)) this.game.toggleUpgrade(upgrade.id);
+        else this.game.buyUpgrade(upgrade.id);
+      });
+      head.append(icon,text,control);
+      card.appendChild(head);
+      let extra=null;
+      if(upgrade.extra) {
+        const row=document.createElement('div');
+        row.className='shop-extra';
+        const label=document.createElement('span');
+        label.className='shop-extra-label';
+        const count=document.createElement('span');
+        count.className='shop-extra-count';
+        const add=document.createElement('button');
+        add.type='button';
+        add.className='shop-add';
+        add.addEventListener('click',()=>this.game.buyExtra(upgrade.extra));
+        row.append(label,count,add);
+        card.appendChild(row);
+        extra={ row, label, count, add, id: upgrade.extra };
+      }
+      host.appendChild(card);
+      return { upgrade, card, title, help, control, extra };
+    });
+  }
 
   // Una ficha por ambiente. El texto se rehace en refreshShop, así el cambio de idioma no toca la estructura.
   buildThemeShelf() {
@@ -439,35 +991,30 @@ export class UI {
       card.classList.toggle('is-active',active);
       card.classList.toggle('is-locked',!unlocked);
     }
-    const coastLocale=locale;
-    this.el.shopCoastalCard.classList.toggle('is-active',g.coastalUnlocked && g.coastalEnabled);
-    this.el.shopCoastalCard.classList.toggle('is-locked',!g.coastalUnlocked);
-    this.el.shopCoastalState.textContent=g.coastalUnlocked
-      ? t(g.coastalEnabled?'shop.coastalOn':'shop.coastalOff')
-      : '\u2212'+CONFIG.COASTAL_COST.toLocaleString(coastLocale);
-    this.el.shopCoastalBtn.textContent=g.coastalUnlocked
-      ? t(g.coastalEnabled?'shop.turnOff':'shop.turnOn')
-      : t('shop.buy');
-    this.el.shopCoastalBtn.disabled=!g.coastalUnlocked && g.score<CONFIG.COASTAL_COST;
-    this.el.shopCoastalBtn.setAttribute('aria-pressed',String(g.coastalUnlocked && g.coastalEnabled));
-
-    this.el.shopAvenueCard.classList.toggle('is-active',g.avenueUnlocked && g.avenueEnabled);
-    this.el.shopAvenueCard.classList.toggle('is-locked',!g.avenueUnlocked);
-    this.el.shopAvenueState.textContent=g.avenueUnlocked
-      ? t(g.avenueEnabled?'shop.coastalOn':'shop.coastalOff')
-      : '\u2212'+CONFIG.AVENUE_COST.toLocaleString(coastLocale);
-    this.el.shopAvenueBtn.textContent=g.avenueUnlocked
-      ? t(g.avenueEnabled?'shop.turnOff':'shop.turnOn')
-      : t('shop.buy');
-    this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
-    this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
-
-    this.el.shopCarCard.classList.toggle('is-active',g.carUnlocked && g.carEnabled);
-    this.el.shopCarCard.classList.toggle('is-locked',!g.carUnlocked);
-    this.el.shopCarState.textContent=g.carUnlocked ? t(g.carEnabled?'shop.carOn':'shop.carOff') : '−'+CONFIG.CAR_COST.toLocaleString(coastLocale);
-    this.el.shopCarBtn.textContent=t(g.carUnlocked ? (g.carEnabled?'shop.turnOff':'shop.turnOn') : 'shop.buy');
-    this.el.shopCarBtn.disabled=!g.carUnlocked && g.score<CONFIG.CAR_COST;
-    this.el.shopCarBtn.setAttribute('aria-pressed',String(g.carUnlocked && g.carEnabled));
+    for(const entry of this.upgradeCards||[]) {
+      const { upgrade, card, title, help, control, extra } = entry;
+      const owned=g.isUpgradeOwned(upgrade.id);
+      const on=owned && g.isUpgradeEnabled(upgrade.id);
+      title.textContent=t('shop.'+upgrade.id);
+      help.textContent=t('shop.'+upgrade.id+'Help');
+      card.classList.toggle('is-owned',owned);
+      card.classList.toggle('is-locked',!owned);
+      card.classList.toggle('is-on',on);
+      control.className=owned?'shop-control shop-switch':'shop-control shop-buy';
+      control.textContent=owned?t(on?'shop.on':'shop.off'):'\u2212'+g.upgradeCost(upgrade.id).toLocaleString(locale);
+      control.disabled=!owned && !g.canBuyUpgrade(upgrade.id);
+      if(owned) { control.setAttribute('role','switch'); control.setAttribute('aria-checked',String(on)); }
+      else { control.removeAttribute('role'); control.removeAttribute('aria-checked'); }
+      if(extra) {
+        const count=g.extraCount(extra.id), max=g.extraMax(extra.id), full=count>=max;
+        extra.label.textContent=t('shop.'+(extra.id==='car'?'cars':'piers'));
+        extra.count.textContent=`${count}/${max}`;
+        extra.add.textContent=full?t('shop.maxed'):'+ \u2212'+g.extraCost(extra.id).toLocaleString(locale);
+        extra.add.disabled=!g.canBuyExtra(extra.id);
+        extra.row.classList.toggle('is-full',full);
+        extra.row.hidden=!owned;
+      }
+    }
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
     const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
     this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');
@@ -479,7 +1026,9 @@ export class UI {
     this.renderPrompt();
     this.refresh();
     document.querySelectorAll('[data-language]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.language===getLanguage())));
-    if (!this.el.endModal.hidden && this.endResult) this.showEnd(this.endResult);
+    if (!this.el.endModal.hidden && this.endResult) this.reopenEnd();
+    this.renderHome();
+    this.refreshInvestigations();
     this.renderBatch();
   }
 
@@ -574,6 +1123,9 @@ export class UI {
     this.el.endModal.hidden = false;
     this.syncModalLock();
     this.el.endEyebrow.hidden = true;
+    // Los agregados del diario no aparecen en la campaña.
+    for (const key of ['endGrade','endMinimum','endCountdown','endMenuBtn','reviewBtn']) if (this.el[key]) this.el[key].hidden = true;
+    if (this.el.retryBtn) this.el.retryBtn.textContent = t('defeat.retry');
     this.el.endTitle.textContent = won ? uiText.victory.title : uiText.defeat.title;
     document.getElementById('endMessage').textContent = won ? uiText.victory.text : uiText.defeat.text;
     document.getElementById('endReveal').hidden = won;
@@ -589,6 +1141,7 @@ export class UI {
   // La tienda se cierra sin avanzar: vuelve la pantalla de fin de caso tal como estaba.
   reopenEnd() {
     const g=this.game;
+    if (this.endResult?.daily) { this.showDailyEnd(g.isDaily && g.finished ? { ...g.dailyResult() } : this.endResult.daily); return; }
     this.showEnd(this.endResult || { won:g.lastOutcomeWon, score:g.score, questions:g.observations.length, lives:g.lives });
   }
 
@@ -625,6 +1178,7 @@ export class UI {
 
   updateDebug() {
     if(!this.game.level || !this.el.debugOutput) return;
+    if(this.game.isDaily) { this.el.debugOutput.textContent=''; return; }
     const level=this.game.level,m=level.metrics,sets=m.minimumSolvingHouseSets||[];
     const candidates=getConsistentCandidates(level,this.game.observations);
     const d=key=>t('debug.'+key), line=(key,value)=>d(key)+'  '+value;

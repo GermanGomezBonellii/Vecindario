@@ -8,7 +8,12 @@ export function getHouseSizeDistribution(level = 1) {
 }
 
 export const CONFIG = {
-  GAME_NAME: 'Vecindario',
+  GAME_NAME: 'VECINDARIO',
+  // Atajos de desarrollo. Con DEBUG en false el juego vuelve a su comportamiento
+  // real: puntos normales, modo lógica pura y tienda solo entre niveles.
+  DEBUG: true,
+  DEBUG_SCORE: 100000,
+  DEBUG_MODE: 'assist',
   BASE_SCORE: 3000,
   SCORE_PER_LEVEL: 350,
   INTERROGATION_COST: 100,
@@ -20,6 +25,10 @@ export const CONFIG = {
   COASTAL_COST: 20000,
   AVENUE_COST: 15000,
   CAR_COST: 25000,
+  CAR_EXTRA_COST: 8000,
+  CAR_MAX: 3,
+  PIER_COST: 6000,
+  PIER_MAX: 3,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -45,6 +54,24 @@ export const CONFIG = {
   },
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
+  // Misterio diario. Los atajos de DEBUG no se aplican a este modo.
+  DAILY: {
+    TIME_ZONE: 'America/Argentina/Buenos_Aires',
+    FALLBACK_UTC_OFFSET_MIN: -180,
+    // Un acierto sin deducción completa descuenta más de lo que se ahorra
+    // preguntando menos que el mínimo teórico (a lo sumo 7 × 100).
+    UNDEDUCED_COST: 1000,
+    // Calificación: preguntas de más sobre el mínimo del solver, más estos
+    // recargos. Dorado ≤ GOLD, verde ≤ GREEN, celeste ≤ BLUE, gris el resto.
+    GRADING: { GOLD: 0, GREEN: 1, BLUE: 2, HINT: 2, WRONG_ACCUSATION: 2, UNDEDUCED: 3 },
+  },
+  // Clasificación global. Vacío = sin servidor: el diario funciona sólo en local y
+  // no se muestra ninguna tabla. Ver DIARIO.md para activarlo.
+  ONLINE: {
+    SUPABASE_URL: '',
+    SUPABASE_ANON_KEY: '',
+    LEADERBOARD_SIZE: 50,
+  },
 };
 
 // Catálogo de ambientes. `cost: 0` significa disponible desde el principio.
@@ -66,3 +93,7 @@ export const THEME_IDS = THEMES.map((theme) => theme.id);
 export const FREE_THEME_IDS = THEMES.filter((theme) => theme.cost === 0).map((theme) => theme.id);
 export function themeById(id) { return THEMES.find((theme) => theme.id === id) || null; }
 export function themeCost(id) { return themeById(id)?.cost ?? 0; }
+
+// Los autos se compran en orden fijo. El primero viene con la mejora; los otros
+// dos son agregados dentro de la misma tarjeta.
+export const CAR_COLORS = ['red', 'blue', 'green'];

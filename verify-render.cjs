@@ -203,11 +203,48 @@ for (const levelNumber of [1,5,12,20]) {
     api.UI.prototype.renderMap.call({el:{board:coastalBoard,app:{dataset:{}}}},coastal);
     const sea=coastalBoard.children.find(e=>e.attrs.id==='sea');
     assert.ok(sea,'falta el mar');
+    // agua + textura + espuma de la orilla. Nada más: cualquier capa extra pegada
+    // al borde del viewBox vuelve a dibujar una costura fija dentro del mar.
     assert.equal(sea.children.length,3);
-    const outer=sea.children.find(e=>e.attrs.class==='sea-foam sea-outer');
-    assert.ok(outer);
-    assert.equal(Number(outer.attrs.x),0);
-    assert.equal(Number(outer.attrs.width),3);
+    const texture=sea.children.find(e=>e.attrs.class==='sea-texture');
+    assert.ok(texture,'falta la textura del mar');
+    assert.equal(texture.children.length,2,'la textura son dos capas, no más');
+    assert.equal(texture.attrs['clip-path'],'url(#sea-clip)','la textura tiene que quedar recortada al agua');
+    // Franjas de color plano, paralelas a la orilla y de la altura del agua. El
+    // patrón se extiende un período más allá del borde exterior, que es lo que hace
+    // que el desplazamiento vuelva a coincidir consigo mismo sin costura.
+    const water=sea.children.find(e=>e.attrs.class==='sea-water');
+    for(const layer of texture.children) {
+      const shift=/--sea-shift:(-?[\d.]+)px/.exec(layer.attrs.style);
+      assert.ok(shift,'la capa no declara su período de desplazamiento');
+      const period=Math.abs(Number(shift[1]));
+      assert.ok(period>0);
+      // El motivo se repite un número entero de veces: cada período aporta las
+      // mismas franjas, que es lo que mantiene el bucle sin costura.
+      const repeats=Math.ceil(Number(water.attrs.width)/period)+2;
+      assert.equal(layer.children.length%repeats,0,'el motivo no se repite entero');
+      const motif=layer.children.length/repeats;
+      assert.ok(motif>=1 && motif<=3,'el motivo tiene que ser de pocas franjas');
+      // Coste a raya: nunca más franjas de las que entran en el mar, por motivo.
+      assert.ok(layer.children.length<=repeats*3);
+      let reach=0;
+      const widths=new Set();
+      for(const band of layer.children) {
+        assert.equal(band.tag,'rect');
+        assert.ok(!band.attrs.fill,'las franjas van con color plano del CSS, sin fill propio');
+        assert.equal(Number(band.attrs.height),Number(water.attrs.height));
+        assert.equal(Number(band.attrs.y),Number(water.attrs.y));
+        assert.ok(Number(band.attrs.width)<period,'la franja no puede ser más ancha que su período');
+        widths.add(Number(band.attrs.width));
+        reach=Math.max(reach,Number(band.attrs.x)+Number(band.attrs.width));
+      }
+      // Cubre todo el ancho del agua con al menos un período de sobra.
+      assert.ok(reach>=Number(water.attrs.x)+Number(water.attrs.width),'las franjas no llegan a la orilla');
+      // Anchos desiguales: el oleaje no puede leerse como rayas regulares.
+      assert.ok(widths.size>1,'todas las franjas miden lo mismo');
+      assert.ok(Math.min(...widths)>=10,'las franjas quedaron demasiado finas');
+    }
+    assert.ok(!JSON.stringify(coastalBoard.children).includes('sea-gradient'),'quedó un degradé en el mar');
     assert.equal(sea.attrs['data-side'],'left');
     const coastalRoads=coastalBoard.children.find(e=>e.attrs.id==='roads');
     assert.equal(coastalRoads.children.filter(e=>e.attrs.class==='road road-pier').length,api.coastGeometry(level.map,'left').pier?1:0);

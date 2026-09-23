@@ -203,7 +203,7 @@ export const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorat
 export function selectCoastSide(seed, levelNumber = 1) {
   return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
 }
-export function coastGeometry(map, side) {
+export function coastGeometry(map, side, pierCount = 1) {
   if (side !== 'left' && side !== 'right') return null;
   const shore = side === 'left' ? map.x[0] : map.x.at(-1);
   const foamWidth = Math.max(10, map.cellSize * COAST_FOAM_RATIO);
@@ -216,29 +216,33 @@ export function coastGeometry(map, side) {
     x: side === 'left' ? shore - foamWidth : shore, y: water.y,
     width: foamWidth, height: water.height,
   };
-  return { side, shore, water, foam, pier: coastPier(map, side, shore) };
+  const piers = coastPiers(map, side, shore, pierCount);
+  return { side, shore, water, foam, piers, pier: piers[0] || null };
 }
 
 // Una calle del borde costero se prolonga hacia el mar. Es solamente un trazo:
 // no hay lotes ni casas sobre ese tramo y no entra en map.roadSegments, así que
 // las distancias y las pistas de calle siguen viendo el mismo barrio de siempre.
-function coastPier(map, side, shore) {
+function coastPiers(map, side, shore, count) {
+  if (count < 1) return [];
   const column = side === 'left' ? 0 : map.cols - 1;
   const rows = [];
   for (let r = 0; r <= map.rows; r += 1) {
     const segment = map.roadSegments.find((s) => s.enabled && s.orientation === 'H' && s.c === column && s.r === r);
     if (segment) rows.push({ r, y: segment.y1, streetKey: segment.streetKey });
   }
-  if (!rows.length) return null;
-  // La del medio: la que menos se confunde con el borde exterior del barrio.
-  const chosen = rows[Math.floor(rows.length / 2)];
+  if (!rows.length) return [];
+  const wanted = Math.min(count, rows.length);
+  // Repartidas a lo largo de la costa: con una sola sale la del medio, como antes.
+  const picked = Array.from({ length: wanted }, (_, i) => rows[Math.round((i + 1) * rows.length / (wanted + 1) - .5)]);
   const length = map.cellSize * COAST_PIER_RATIO;
-  return {
-    streetKey: chosen.streetKey,
-    y: chosen.y,
+  const seen = new Set();
+  return picked.filter((row) => row && !seen.has(row.r) && seen.add(row.r)).map((row) => ({
+    streetKey: row.streetKey,
+    y: row.y,
     x1: shore,
     x2: side === 'left' ? shore - length : shore + length,
-  };
+  }));
 }
 
 // ---------------------------------------------------------------------------

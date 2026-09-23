@@ -15,7 +15,8 @@
   --shadow: 0 18px 50px rgba(0,0,0,.06);
   --board-bg: #ffffff;
   --sea: #b9d2e0;
-  --sea-foam: #d3e6e8;
+  --sea-band: #aecada;
+  --sea-foam: #d6e9ec;
   --avenue-median: #a8e6a3;
   color-scheme: light;
   --focus: #245cdb;
@@ -37,7 +38,23 @@
 }
 
 .car-swatch { width: 36px; height: 16px; margin: 12px auto; background: #e13d40; border-block: 4px solid #34383d; border-radius: 0; }
-#decorativeCar { pointer-events: none; }
+/* Autos decorativos. Cada uno lleva su color en data-car; el contorno es una
+   versión oscura del mismo tono, que es la convención del pixel art. Va sin
+   escalar, así que conserva el mismo grosor en pantalla a cualquier tamaño, y con
+   `paint-order` el relleno se pinta encima del trazo: el contorno queda por fuera y
+   no se come el color cuando el auto mide pocos píxeles. */
+.decorative-car { pointer-events: none; }
+.decorative-car .car-body {
+  fill: var(--car-fill, #f2453f);
+  stroke: var(--car-edge, #8d1a17);
+  stroke-width: 3;
+  paint-order: stroke fill;
+  vector-effect: non-scaling-stroke;
+}
+.decorative-car[data-car="red"] { --car-fill: #f2453f; --car-edge: #8d1a17; }
+.decorative-car[data-car="blue"] { --car-fill: #3f7bf2; --car-edge: #16398d; }
+.decorative-car[data-car="green"] { --car-fill: #35b658; --car-edge: #146b2b; }
+@media (max-width: 560px) { .decorative-car .car-body { stroke-width: 2.2; } }
 
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
@@ -64,12 +81,39 @@ body.modal-open { overflow: hidden; }
 .shop-life-card .shop-life-art { height: auto; line-height: 1; }
 .shop-life-card p { flex: 1 1 220px; color: var(--muted); }
 .shop-life-card button { width: auto; margin-top: 0; padding-inline: 18px; }
+/* Tienda: tarjetas uniformes. Cada mejora es una fila con ícono, texto y un solo
+   control a la derecha; los agregados cuelgan debajo en su propia fila. */
+.shop-upgrades { display: grid; gap: 8px; margin-top: 10px; }
+.shop-card { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; }
+.shop-card.is-on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.shop-card.is-locked { opacity: .92; }
+.shop-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.shop-card-icon { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border); }
+.shop-card-icon[data-icon="coastal"] { background: linear-gradient(90deg, var(--sea) 0 55%, var(--sea-foam) 55% 100%); }
+.shop-card-icon[data-icon="car"] { background: var(--board-bg); box-shadow: inset 0 0 0 7px var(--road), inset 0 0 0 9px #e5322f; }
+.shop-card-icon[data-icon="avenue"] { background: linear-gradient(180deg, var(--road) 0 35%, var(--avenue-median) 35% 65%, var(--road) 65% 100%); }
+.shop-card-text { flex: 1 1 auto; min-width: 0; }
+.shop-card-text h3 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+.shop-card-text p { margin: 2px 0 0; font-size: 12px; line-height: 1.3; color: var(--muted); }
+.shop-control { flex: 0 0 auto; min-height: 34px; min-width: 62px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 11px; font-weight: 800; letter-spacing: .06em; cursor: pointer; }
+.shop-switch[aria-checked="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.shop-extra { display: flex; align-items: center; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border); }
+.shop-extra[hidden] { display: none; }
+.shop-extra-label { flex: 1 1 auto; min-width: 0; font-size: 11px; letter-spacing: .08em; font-weight: 800; color: var(--muted); }
+.shop-extra-count { flex: 0 0 auto; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.shop-add { flex: 0 0 auto; min-height: 30px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 11px; font-weight: 800; cursor: pointer; }
+.shop-extra.is-full .shop-add { letter-spacing: .06em; }
+@media (max-width: 440px) {
+  .shop-card-text p { font-size: 11px; }
+  .shop-control { min-width: 56px; padding: 6px 8px; }
+}
+
 .shop-section-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 22px; }
 .shop-section-help { font-size: 12px; color: var(--muted); }
 .shop-theme-shelf { grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 10px; }
 .shop-theme-card { gap: 8px; }
 .shop-theme-card h3 { font-size: 15px; letter-spacing: -.02em; }
-.shop-theme-card p { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.shop-theme-card p { display: none; }
 .shop-theme-card.is-active { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .theme-price { font-size: 12px; letter-spacing: .04em; color: var(--muted); }
 .theme-swatch {
@@ -140,8 +184,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   --bg: #e99853;
   --surface: rgba(255,248,239,.94);
   --board-bg: #f6ddbe;
-  --sea: #c9b08c;
-  --sea-foam: #ddc7a4;
+  --sea: #b0764a;
+  --sea-band: #b87f53;
+  --sea-foam: #d8a473;
   --avenue-median: #8fd08a;
   --ink: #1b120c;
   --muted: #674b37;
@@ -176,7 +221,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   --surface: #171a1f;
   --board-bg: #14171c;
   --sea: #1b2a35;
-  --sea-foam: #243b44;
+  --sea-band: #1f303c;
+  --sea-foam: #2c4854;
   --avenue-median: #5e9a5b;
   --ink: #f4f4ef;
   --muted: #c0c4cc;
@@ -194,7 +240,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   --surface: #16241b;
   --board-bg: #12201a;
   --sea: #16302c;
-  --sea-foam: #1e4038;
+  --sea-band: #1a3630;
+  --sea-foam: #244a40;
   --avenue-median: #5f9e5c;
   --ink: #eef5ee;
   --muted: #a8c0ac;
@@ -230,7 +277,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   --surface: #111b3c;
   --board-bg: #0d1633;
   --sea: #11214a;
-  --sea-foam: #182e5e;
+  --sea-band: #152654;
+  --sea-foam: #1e3468;
   --avenue-median: #5b9a72;
   --ink: #eaefff;
   --muted: #a7b4dc;
@@ -264,8 +312,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   --bg: #d1526d;
   --surface: rgba(255,242,245,.95);
   --board-bg: #fadde5;
-  --sea: #e2b5c2;
-  --sea-foam: #efcdd4;
+  --sea: #b9718c;
+  --sea-band: #c07a94;
+  --sea-foam: #dba3b8;
   --avenue-median: #9ed69a;
   --ink: #26080f;
   --muted: #6d3140;
@@ -312,6 +361,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 /* El disparador del panel solo existe en mobile; en desktop manda el de la barra. */
 .logic-toggle.logic-toggle-panel { display: none; }
 .status-item { min-width: 74px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--surface) 82%, transparent); color: var(--ink); text-align: left; }
+.score-status { cursor: pointer; font: inherit; }
+.score-status:disabled { cursor: default; }
 .theme-toggle { cursor: pointer; transition: transform 120ms ease, background var(--transition), border-color var(--transition); }
 .theme-toggle:not(:disabled):active { transform: scale(.97); }
 .theme-toggle:disabled { cursor: default; opacity: 1; }
@@ -323,7 +374,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .panel > section { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .board-shell { background: var(--board-bg); border: 1px solid var(--border); box-shadow: var(--shadow); }
 .board-shell { border-radius: 24px; padding: clamp(8px, 1.2vw, 16px); min-width: 0; overflow: hidden; }
-.board-frame { position: relative; width: 100%; aspect-ratio: 10 / 7; min-height: 380px; }
+.board-frame { position: relative; width: 100%; aspect-ratio: 10 / 7; min-height: 380px; overflow: hidden; }
+/* Escenario del desplazamiento entre barrios: dos escenas completas, una al lado de
+   la otra, y una sola transform sobre el contenedor. Nunca se anima una casa. */
+.board-stage { position: absolute; inset: 0; display: flex; width: 100%; }
+.board-stage > .board { flex: 0 0 100%; }
+.board-stage.is-sliding { will-change: transform; pointer-events: none; }
 .board { width: 100%; height: 100%; display: block; overflow: visible; touch-action: manipulation; }
 
 .road, .road-center, .lot-line { pointer-events: none; }
@@ -340,7 +396,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .house.suspect .house-shape { pointer-events: all; fill: var(--suspect); }
 .house.cleared .house-shape { pointer-events: all; fill: var(--cleared); }
 .house.pending-accuse .house-shape, .house.murderer .house-shape { pointer-events: all; fill: var(--accused); }
-.house.selected .house-shape { stroke: var(--ink); }
+
 .house.incompatible { opacity: .22; }
 .house.unavailable { opacity: .32; filter: saturate(.15); }
 .house.resolution-dim { opacity: .13; }
@@ -351,6 +407,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .house.was-asked.cleared .house-asked-tone { fill: color-mix(in srgb, var(--cleared) 72%, var(--tone-cleared)); }
 .house.was-asked.pending-accuse .house-asked-tone,
 .house.was-asked.murderer .house-asked-tone { fill: color-mix(in srgb, var(--accused) 72%, var(--tone-accused)); }
+/* Contorno de selección: capa propia por encima de la trama y de las calles, con
+   halo del color del suelo para que contraste en cualquier ambiente. Es estable:
+   solo se le mueven las coordenadas, no se reordena nada al hacer clic. */
+.selection-layer { pointer-events: none; }
+.selection-layer[hidden] { display: none; }
+.selection-halo, .selection-edge { fill: none; vector-effect: non-scaling-stroke; }
+.selection-halo { stroke: var(--board-bg); stroke-width: 10; }
+.selection-edge { stroke: var(--ink); stroke-width: 6; }
 .house-sleep-mark { fill: var(--ink); opacity: .7; pointer-events: none; }
 /* La puerta: un trazo de un octavo de lote sobre el lado por el que la casa da a la calle. */
 .house-door { fill: var(--board-bg); pointer-events: none; transition: fill var(--transition); }
@@ -358,9 +422,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 
 /* Sin marco: la brújula es una cruz con las cuatro letras en las puntas.
    Los brazos van en porcentaje para que sirva el mismo trazado en mobile. */
-/* Ciudad costera. Dos rectángulos y una sola animación: la espuma se estira y se
-   encoge apoyada en la orilla, que es lo que da la sensación de marea. Se anima
-   transform, que el compositor resuelve sin repintar el tablero. */
+/* Ciudad costera. La espuma se estira y se encoge apoyada en la orilla, y por
+   detrás dos capas de bandas muy tenues se desplazan a distinta velocidad y en
+   sentidos opuestos: eso da profundidad sin agregar detalle. Todo es transform,
+   que el compositor resuelve sin repintar el tablero. */
 .sea { pointer-events: none; }
 .sea-water { fill: var(--sea); transition: fill var(--transition); }
 .sea-foam {
@@ -368,16 +433,21 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
   transition: fill var(--transition);
   transform-box: fill-box;
   will-change: transform;
-  animation: tide 7s ease-in-out infinite alternate;
+  animation: tide 4.2s ease-in-out infinite alternate;
 }
 .app[data-coast="right"] .compass { left: 12px; right: auto; }
 @media (max-width: 880px) { .app[data-coast="right"] .compass { left: 8px; } }
 .sea[data-side="left"] .sea-foam { transform-origin: right center; }
 .sea[data-side="right"] .sea-foam { transform-origin: left center; }
-.sea .sea-outer { opacity: .35; }
-.sea[data-side="left"] .sea-outer { transform-origin: left center; }
-.sea[data-side="right"] .sea-outer { transform-origin: right center; }
 @keyframes tide { from { transform: scaleX(1); } to { transform: scaleX(1.8); } }
+.sea-texture { pointer-events: none; }
+/* Franjas de color plano, paralelas a la orilla, que avanzan hacia ella. Se anima
+   translateX exactamente un período, así el patrón vuelve a coincidir consigo mismo
+   y el bucle no tiene costura. Dos capas a distinta velocidad dan profundidad sin
+   agregar ni un degradé. */
+.sea-band { fill: var(--sea-band); animation: seaSwell var(--sea-duration, 9s) linear infinite; }
+.sea-band-far { opacity: .45; }
+@keyframes seaSwell { from { transform: translateX(0); } to { transform: translateX(var(--sea-shift, 0px)); } }
 /* El tramo decorativo que desemboca en el mar: la misma calle, sin lotes detrás. */
 .road-pier { pointer-events: none; stroke-linecap: butt; stroke-linejoin: miter; }
 /* Resaltado de calle. Hereda de .road el ancho y el remate, así que ocupa exactamente
@@ -415,7 +485,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus)
 .action.danger { border-color: color-mix(in srgb, var(--accused) 55%, var(--border)); color: var(--danger-text); }
 .action:disabled { opacity: .3; cursor: not-allowed; }
 .action:not(:disabled):active, .hint-button:active, .modal-primary:active, .modal-secondary:active, .mode-option:active { transform: scale(.985); }
-.hint-button { width: 100%; margin-top: 8px; padding: 10px 12px; display: flex; justify-content: space-between; background: color-mix(in srgb, var(--bg) 60%, var(--surface)); color: var(--ink); font-size: 12px; font-weight: 700; }
+.hint-button { width: 100%; margin-top: 8px; padding: 10px 12px; display: flex; justify-content: space-between; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 700; }
 .hint-button:disabled { opacity: .38; cursor: not-allowed; }
 .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; font-size: 11px; color: var(--muted); }
 .legend div { display: flex; align-items: center; gap: 7px; }
@@ -530,9 +600,32 @@ html, .app { background: var(--bg); color: var(--ink); }
   transition-property: background-color, color, border-color, fill, stroke, opacity, transform;
   transition-timing-function: ease;
 }
+/* El tablero administra su propio deslizamiento: la transición global de 180 ms no
+   debe animar la reposición del transform al terminar (se veía como un segundo
+   movimiento). Mayor especificidad que `.app *`, que es la regla de arriba. */
+.app .board-stage { transition: none; }
+/* Mientras cruza, cada escena se recorta a su propia caja: el mar se dibuja un poco
+   más allá del borde del tablero y, sin recorte, la ciudad que entra le pisaba esa
+   franja a la que sale. Y las dos ciudades viajan separadas, así el mar de la
+   primera termina en su orilla y se va de cuadro antes de que llegue la segunda. */
+.app .board-stage.is-sliding { transition: transform 900ms cubic-bezier(.4, 0, .2, 1); }
+.app .board-stage.is-sliding > .board { overflow: hidden; }
+/* El tramo entre las dos ciudades continúa lo que haya en el borde por el que sale
+   la primera: si ahí termina el mar, el tramo es agua y el océano sigue sin corte
+   hasta la ciudad que entra; si ahí termina el barrio, es el fondo del tablero. Así
+   las cuatro combinaciones de costa quedan coherentes. */
+.app .board-stage > .scene-seam { flex: 0 0 12%; background: var(--board-bg); }
+.app .board-stage > .scene-seam[data-fill="sea"] { background: var(--sea); }
+.app .board-stage.is-sliding.is-shifted { transform: translateX(-112%); }
+/* Durante el cruce el oleaje se congela en las dos escenas: nada aparece ni se
+   desvanece, el mar sale de cuadro deslizándose con su escena y el que entra ya
+   llega con sus olas dibujadas contra la orilla, sólo que quietas. Al aterrizar,
+   cada animación sigue desde donde quedó. */
+.app .board-stage.is-sliding .sea-band,
+.app .board-stage.is-sliding .sea-foam { animation-play-state: paused; }
 button:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--focus); }
 button:disabled { background: var(--disabled-bg) !important; color: var(--disabled-text) !important; border-color: var(--border) !important; opacity: 1 !important; cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .app, .app *, body { transition: none !important; } .sea-foam { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .app, .app *, body { transition: none !important; } .sea-foam, .sea-band { animation: none !important; } }
 
 /* Cabecera mobile: dos filas que siempre entran en el ancho visible, sin scroll
    horizontal. Fila 1: título + NIVEL + idioma. Fila 2: PUNTOS, VIDAS y AMBIENTE en
@@ -607,4 +700,115 @@ button:disabled { background: var(--disabled-bg) !important; color: var(--disabl
   }
   .logic-toggle-panel .logic-symbol { font-size: 15px; }
   .logic-toggle-panel .logic-caption { font-size: 9px; letter-spacing: .08em; }
+}
+
+/* ---- Menú inicial, misterio diario y mis investigaciones -------------------
+   Las calificaciones usan rellenos de tono medio con texto siempre oscuro, así se
+   leen igual sobre cualquier ambiente. El color nunca va solo: cada celda y cada
+   distintivo llevan su marca (★ +1 +2 ✓ ✕) y el nombre de la calificación. */
+:root {
+  --grade-gold: #e0b12a;
+  --grade-green: #4fb56f;
+  --grade-blue: #7cc4e4;
+  --grade-gray: #b3b3ad;
+  --grade-red: #e0665f;
+  --grade-ink: #15130f;
+}
+.logic-toggle[hidden], .hint-button[hidden] { display: none !important; }
+.menu-button { align-self: center; min-height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--ink); font-size: 10px; font-weight: 800; letter-spacing: .12em; cursor: pointer; }
+.brand-wrap { align-items: center; }
+
+.modal.home-modal { width: min(640px, 100%); }
+.home-modal h2 { font-size: clamp(24px, 5vw, 38px); }
+.home-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0 12px; }
+.home-option { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 150px; padding: 16px; text-align: left; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.home-option:active { transform: scale(.985); }
+.home-daily { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.home-kicker { font-size: 10px; font-weight: 800; letter-spacing: .14em; color: var(--muted); }
+.home-option strong { font-size: 19px; letter-spacing: -.02em; line-height: 1.15; }
+.home-option strong::first-letter { text-transform: uppercase; }
+.home-help { font-size: 12px; line-height: 1.35; color: var(--muted); }
+.home-status { margin-top: auto; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.home-countdown { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-stats { width: 100%; }
+
+.grade-badge { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.grade-badge[hidden] { display: none; }
+.grade-mark { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--grade-fill, var(--disabled-bg)); color: var(--grade-ink); font-size: 16px; font-weight: 900; }
+.grade-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.grade-text strong { font-size: 15px; }
+.grade-text span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+[data-grade="gold"] { --grade-fill: var(--grade-gold); }
+[data-grade="green"] { --grade-fill: var(--grade-green); }
+[data-grade="blue"] { --grade-fill: var(--grade-blue); }
+[data-grade="gray"] { --grade-fill: var(--grade-gray); }
+[data-grade="red"] { --grade-fill: var(--grade-red); }
+.end-countdown { font-variant-numeric: tabular-nums; }
+
+.modal.stats-modal { width: min(620px, 100%); }
+.stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stats-tile { padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; min-width: 0; }
+.stats-tile strong { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stats-tile span { display: block; margin-top: 2px; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.calendar { margin-top: 18px; }
+.calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.calendar-head strong { font-size: 15px; }
+.calendar-head strong::first-letter { text-transform: uppercase; }
+.calendar-nav { width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.calendar-weekdays span { text-align: center; font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; padding-bottom: 2px; }
+.calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; height: 44px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: transparent; color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+.calendar-day[data-grade] { background: var(--grade-fill); border-color: var(--grade-fill); color: var(--grade-ink); }
+.calendar-day[data-state="playing"] { border-style: dashed; border-color: var(--ink); }
+.calendar-day.is-today { box-shadow: inset 0 0 0 2px var(--ink); }
+.calendar-day[data-grade].is-today { box-shadow: inset 0 0 0 2px var(--grade-ink); }
+.calendar-day.is-selected { outline: 2px solid var(--focus); outline-offset: 2px; }
+.calendar-num { font-size: 13px; font-weight: 750; line-height: 1; }
+.calendar-mark { font-size: 10px; font-weight: 900; line-height: 1; min-height: 10px; }
+/* Días futuros y anteriores al primer misterio: bloqueados, sin relleno. */
+.calendar-grid .calendar-day:disabled { background: transparent !important; border-color: transparent !important; color: var(--muted) !important; opacity: .45 !important; cursor: default; }
+
+.calendar-detail { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.detail-date { display: block; font-size: 14px; }
+.detail-date::first-letter { text-transform: uppercase; }
+.calendar-detail .grade-badge { margin-top: 10px; }
+.detail-note { margin: 8px 0 0; font-size: 13px; }
+.detail-stats { display: grid; grid-auto-flow: column; grid-template-rows: auto auto; gap: 2px 6px; margin: 10px 0 0; }
+.detail-stats dt { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.detail-stats dd { margin: 0; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.detail-actions button { flex: 1 1 140px; }
+
+.leaderboard { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.leaderboard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.leaderboard-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 6%, var(--surface)); }
+.leaderboard-tabs button { min-height: 32px; padding: 5px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; cursor: pointer; }
+.leaderboard-tabs button[aria-selected="true"]:not(:disabled) { background: var(--surface); color: var(--ink); }
+.leaderboard-status { margin: 10px 0 0; font-size: 13px; }
+.leaderboard-status:empty { display: none; }
+.leaderboard-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.leaderboard-list:empty { display: none; }
+.leaderboard-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.leaderboard-row.is-me { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 800; }
+.leaderboard-pos { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.leaderboard-name-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaderboard-points { font-variant-numeric: tabular-nums; font-weight: 800; }
+.leaderboard-gap { text-align: center; color: var(--muted); }
+.leaderboard-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.leaderboard-name[hidden] { display: none; }
+.leaderboard-name label { flex: 1 0 100%; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.leaderboard-name input { flex: 1 1 160px; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }
+
+@media (max-width: 880px) {
+  .brand-wrap { display: flex; gap: 8px; }
+  .menu-button { min-height: 30px; padding: 5px 8px; font-size: 9px; }
+}
+@media (max-width: 520px) {
+  .home-options { grid-template-columns: 1fr; }
+  .home-option { min-height: 0; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-weekdays, .calendar-grid { gap: 3px; }
+  .calendar-day { min-height: 0; border-radius: 7px; }
+  .calendar-num { font-size: 12px; }
 }

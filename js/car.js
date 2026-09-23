@@ -1,5 +1,6 @@
 import { createRng } from './rng.js';
-import { AVENUE_MEDIAN, AVENUE_ROADWAY } from './map.js';
+import { CAR_COLORS } from './config.js';
+import { AVENUE_MEDIAN, AVENUE_ROADWAY, ROAD_WIDTH } from './map.js';
 
 // A private navigation view: never changes the logical graph or consumes its RNG.
 export function createCarRoute(map, avenue, seed) {
@@ -54,18 +55,40 @@ export function createCarRoute(map, avenue, seed) {
   return {initial,next};
 }
 
-export function mountCar(svg,map,avenue,seed) {
+const CAR_ACROSS=4;        // ancho del dibujo en unidades de diseño, de rueda a rueda
+const CAR_LANE_FILL=.85;   // porción del ancho de calzada que ocupa el auto
+
+// Varios autos a la vez: cada uno con su propia ruta (semilla distinta) y su color
+// en orden fijo. Devuelve una sola función que los desmonta a todos.
+export function mountCars(svg,map,avenue,seed,count=1) {
+  const disposers=[];
+  for(let i=0;i<count;i++) disposers.push(mountCar(svg,map,avenue,`${seed}|car${i}`,CAR_COLORS[i]||CAR_COLORS.at(-1)));
+  return ()=>{for(const dispose of disposers) dispose();};
+}
+
+export function mountCar(svg,map,avenue,seed,color=CAR_COLORS[0]) {
   const route=createCarRoute(map,avenue,seed);
   if(!route) return ()=>{};
   const group=document.createElementNS('http://www.w3.org/2000/svg','g');
-  group.setAttribute('id','decorativeCar');group.setAttribute('pointer-events','none');group.setAttribute('aria-hidden','true');
-  // Four wheels and one body; local +X is forward. Total footprint: 6 x 4.
-  for(const [x,y,w,h,fill] of [[-2.4,-2,1.4,1,'#34383d'],[1,-2,1.4,1,'#34383d'],[-2.4,1,1.4,1,'#34383d'],[1,1,1.4,1,'#34383d'],[-3,-1.4,6,2.8,'#e13d40']]) {
+  group.setAttribute('class','decorative-car');group.setAttribute('data-car',color);group.setAttribute('pointer-events','none');group.setAttribute('aria-hidden','true');
+  // El auto se dibuja en unidades de diseño (4 de ancho por 6.5 de largo, +X hacia
+  // adelante) y después se escala para ocupar CAR_LANE_FILL del ancho de la calzada
+  // por la que va, dejando el mismo margen proporcional a cada lado. Si el barrio
+  // tiene avenida, la calzada más angosta que recorre es media avenida, y de ahí
+  // sale el límite.
+  const lane=avenue?AVENUE_ROADWAY:ROAD_WIDTH;
+  const scale=lane*CAR_LANE_FILL/CAR_ACROSS;
+  // Un bloque rojo y nada más: a los tamaños en que se ve el auto, cualquier
+  // detalle interior es ruido.
+  for(const [x,y,w,h,cls] of [
+    [-3.6,-2,7.2,4,'car-body'],
+  ]) {
     const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-    for(const [key,value] of Object.entries({x,y,width:w,height:h,fill})) rect.setAttribute(key,value);
+    for(const [key,value] of Object.entries({x,y,width:w,height:h})) rect.setAttribute(key,value);
+    rect.setAttribute('class',cls);
     group.appendChild(rect);
   }
-  const draw=p=>group.setAttribute('transform',`translate(${p.x} ${p.y}) rotate(${p.angle})`);
+  const draw=p=>group.setAttribute('transform',`translate(${p.x} ${p.y}) rotate(${p.angle}) scale(${scale})`);
   draw(route.initial);svg.appendChild(group);
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
   let frames=route.next(),elapsed=0,last=null,raf=null,disposed=false;

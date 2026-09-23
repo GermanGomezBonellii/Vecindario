@@ -1,0 +1,24 @@
+{
+  "name": "vecindario",
+  "version": "1.0.0",
+  "description": "La ampliación de testimonios y casas multicelda está documentada en [TESTIMONIOS.md](TESTIMONIOS.md): familias activas, definiciones matemáticas, límites de diversidad, métricas y familias pendientes. Ejecutá `node verify-testimonies.cjs` para la validación masiva.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GermanGomezBonellii/Vecindario.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GermanGomezBonellii/Vecindario/issues"
+  },
+  "homepage": "https://github.com/GermanGomezBonellii/Vecindario#readme",
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

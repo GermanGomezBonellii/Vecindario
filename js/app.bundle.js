@@ -12,7 +12,12 @@ function getHouseSizeDistribution(level = 1) {
 }
 
 const CONFIG = {
-  GAME_NAME: 'Vecindario',
+  GAME_NAME: 'VECINDARIO',
+  // Atajos de desarrollo. Con DEBUG en false el juego vuelve a su comportamiento
+  // real: puntos normales, modo lógica pura y tienda solo entre niveles.
+  DEBUG: true,
+  DEBUG_SCORE: 100000,
+  DEBUG_MODE: 'assist',
   BASE_SCORE: 3000,
   SCORE_PER_LEVEL: 350,
   INTERROGATION_COST: 100,
@@ -24,6 +29,10 @@ const CONFIG = {
   COASTAL_COST: 20000,
   AVENUE_COST: 15000,
   CAR_COST: 25000,
+  CAR_EXTRA_COST: 8000,
+  CAR_MAX: 3,
+  PIER_COST: 6000,
+  PIER_MAX: 3,
   SUNSET_COST: 10000,
   LIFE_LOSS_FLASH_MS: 450,
   START_HOUR: 17,
@@ -49,6 +58,24 @@ const CONFIG = {
   },
   DISTANCE_CLUE_MAX_SMALL_LEVEL: 1,
   DISTANCE_CLUE_MAX_LARGE_LEVEL: 1,
+  // Misterio diario. Los atajos de DEBUG no se aplican a este modo.
+  DAILY: {
+    TIME_ZONE: 'America/Argentina/Buenos_Aires',
+    FALLBACK_UTC_OFFSET_MIN: -180,
+    // Un acierto sin deducción completa descuenta más de lo que se ahorra
+    // preguntando menos que el mínimo teórico (a lo sumo 7 × 100).
+    UNDEDUCED_COST: 1000,
+    // Calificación: preguntas de más sobre el mínimo del solver, más estos
+    // recargos. Dorado ≤ GOLD, verde ≤ GREEN, celeste ≤ BLUE, gris el resto.
+    GRADING: { GOLD: 0, GREEN: 1, BLUE: 2, HINT: 2, WRONG_ACCUSATION: 2, UNDEDUCED: 3 },
+  },
+  // Clasificación global. Vacío = sin servidor: el diario funciona sólo en local y
+  // no se muestra ninguna tabla. Ver DIARIO.md para activarlo.
+  ONLINE: {
+    SUPABASE_URL: '',
+    SUPABASE_ANON_KEY: '',
+    LEADERBOARD_SIZE: 50,
+  },
 };
 
 // Catálogo de ambientes. `cost: 0` significa disponible desde el principio.
@@ -70,6 +97,10 @@ const THEME_IDS = THEMES.map((theme) => theme.id);
 const FREE_THEME_IDS = THEMES.filter((theme) => theme.cost === 0).map((theme) => theme.id);
 function themeById(id) { return THEMES.find((theme) => theme.id === id) || null; }
 function themeCost(id) { return themeById(id)?.cost ?? 0; }
+
+// Los autos se compran en orden fijo. El primero viene con la mejora; los otros
+// dos son agregados dentro de la misma tarjeta.
+const CAR_COLORS = ['red', 'blue', 'green'];
 
 // ---- copy.js ----
 // Presentation only. Never pass game state or the procedural RNG to this picker.
@@ -128,8 +159,8 @@ spanishCopy.defeat.text='No te quedan vidas.';
 englishCopy.defeat.text="You have no lives left.";
 spanishCopy.lifePurchase={full:'Ya tenés todas las vidas.',poor:'Necesitás 3000 puntos.',ready:'Comprá una vida por 3000 puntos.'};
 englishCopy.lifePurchase={full:'Your lives are full.',poor:'You need 3000 points.',ready:'Buy one life for 3000 points.'};
-spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'Algunos barrios terminan contra el mar, con una calle que desemboca en la costa.',car:'Auto',carHelp:'Un auto recorre las calles. Compra permanente; activalo para el próximo barrio.',carOn:'Activado',carOff:'Desactivado',avenue:'Avenida con boulevard',avenueHelp:'Una calle importante se convierte en doble calzada, con una franja verde en el medio.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar'};
-englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'Some neighborhoods end at the sea, with one street running down to the shore.',car:'Car',carHelp:'A car cruises the streets. Permanent purchase; enable it for the next neighborhood.',carOn:'On',carOff:'Off',avenue:'Boulevard Avenue',avenueHelp:'One major street becomes a dual carriageway with a green strip down the middle.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off'};
+spanishCopy.shop={visit:'TIENDA',title:'Una pausa en el barrio',eyebrow:'TIENDA',intro:'Reponé vidas o elegí cómo se ve el próximo barrio.',balance:'TUS PUNTOS',life:'Una vida más',lifeHelp:'Recuperá una vida, hasta un máximo de tres.',buy:'Desbloquear',owned:'Desbloqueado',use:'Usar',inUse:'En uso',themes:'AMBIENTE',ambiences:'AMBIENTES',ambiencesHelp:'Cada ambiente cambia el barrio entero: fondo, calles y casas.',permanent:'Compra permanente. Después podés cambiar de ambiente cuando quieras.',saveMore:'Podés seguir ahorrando: cada ambiente cuesta 10.000 puntos.',saved:'Ya desbloqueaste todos los ambientes. Elegí el que prefieras.',continue:'SIGUIENTE BARRIO',back:'VOLVER',close:'Cerrar la tienda',cycle:'Cambiar entre los ambientes desbloqueados',credit:'Los puntos sin gastar se conservan. Al entrar al próximo barrio recibís su asignación de puntos.',skip:'Podés entrar al próximo barrio sin pasar por la tienda.',styles:'ESTILO DE BARRIO',stylesHelp:'Se aplica al próximo barrio, no al que acabás de resolver.',coastal:'Ciudad costera',coastalHelp:'El barrio termina contra el mar.',car:'Auto',carHelp:'Autos recorriendo las calles.',carOn:'Activado',carOff:'Desactivado',avenue:'Avenida con boulevard',avenueHelp:'Una calle se vuelve doble calzada.',coastalOn:'Activada',coastalOff:'Desactivada',turnOn:'Activar',turnOff:'Desactivar',on:'ON',off:'OFF',cars:'Autos',piers:'Puertos',carExtra:'Auto',pierExtra:'Puerto',maxed:'Completo',needsCoast:'Necesita el mar'};
+englishCopy.shop={visit:'SHOP',title:'A pause in the neighborhood',eyebrow:'SHOP',intro:'Restore lives or choose the look of the next neighborhood.',balance:'YOUR POINTS',life:'One more life',lifeHelp:'Restore one life, up to a maximum of three.',buy:'Unlock',owned:'Unlocked',use:'Use',inUse:'In use',themes:'THEME',ambiences:'THEMES',ambiencesHelp:'Each theme restyles the whole neighborhood: backdrop, streets and houses.',permanent:'A permanent purchase. Switch themes whenever you like.',saveMore:'Keep saving: each theme costs 10,000 points.',saved:"You've unlocked every theme. Pick whichever you prefer.",continue:'NEXT NEIGHBORHOOD',back:'BACK',close:'Close the shop',cycle:'Switch between unlocked themes',credit:'Unspent points carry over. Entering the next neighborhood adds its starting points.',skip:'You can enter the next neighborhood without visiting the shop.',styles:'NEIGHBORHOOD STYLE',stylesHelp:'Applies to the next neighborhood, not the one you just solved.',coastal:'Coastal city',coastalHelp:'The neighborhood ends at the sea.',car:'Car',carHelp:'Cars driving the streets.',carOn:'On',carOff:'Off',avenue:'Boulevard Avenue',avenueHelp:'One street becomes a dual carriageway.',coastalOn:'On',coastalOff:'Off',turnOn:'Turn on',turnOff:'Turn off',on:'ON',off:'OFF',cars:'Cars',piers:'Ports',carExtra:'Car',pierExtra:'Port',maxed:'Full',needsCoast:'Needs the sea'};
 spanishCopy.themes={
   day:{name:'Claro',short:'\u263c CLARO',help:'El barrio a plena luz. Siempre disponible.'},
   night:{name:'Oscuro',short:'\u263e OSCURO',help:'Tinta clara sobre fondo profundo. Siempre disponible.'},
@@ -146,6 +177,37 @@ englishCopy.themes={
   midnight:{name:'Midnight blue',short:'\u2605 MIDNIGHT',help:'Deep blue, the neighborhood long past midnight.'},
   cherry:{name:'Cherry blossom',short:'\u2740 CHERRY',help:'Cherry reds and blossom pinks, with near-black streets.'},
 };
+// --- Menú inicial, misterio diario, investigaciones y clasificación ----------
+spanishCopy.labels.menu='MENÚ';
+englishCopy.labels.menu='MENU';
+spanishCopy.labels.daily='DIARIO';
+englishCopy.labels.daily='DAILY';
+spanishCopy.aria.menu='Volver al menú';
+englishCopy.aria.menu='Back to the menu';
+spanishCopy.home={eyebrow:'VECINDARIO',title:'Hay un asesino en el barrio.',rule:'Todos dicen la verdad. Menos él.',daily:'MISTERIO DIARIO',dailyHelp:'Un caso nuevo cada día. El mismo para todos.',campaign:'MODO CAMPAÑA',campaignHelp:'Barrios sin fin, cada vez más enredados.',campaignLevel:'Nivel {n}',campaignNew:'Nivel 1',campaignResume:'Seguir en el nivel {n}',stats:'MIS INVESTIGACIONES',next:'Próximo misterio en {time}',statusNew:'Sin investigar',statusPlaying:'Investigación en curso',statusWon:'Resuelto · {grade}',statusLost:'Sin resolver'};
+englishCopy.home={eyebrow:'VECINDARIO',title:"There's a murderer in the neighborhood.",rule:'Everyone tells the truth. Except them.',daily:'DAILY MYSTERY',dailyHelp:'A new case every day. The same for everyone.',campaign:'CAMPAIGN',campaignHelp:'Endless neighborhoods, each one more tangled.',campaignLevel:'Level {n}',campaignNew:'Level 1',campaignResume:'Continue at level {n}',stats:'MY INVESTIGATIONS',next:'Next mystery in {time}',statusNew:'Not investigated',statusPlaying:'Investigation in progress',statusWon:'Solved · {grade}',statusLost:'Unsolved'};
+spanishCopy.daily={badge:'MISTERIO DIARIO',practiceBadge:'PRÁCTICA',resume:'Retomás la investigación donde la dejaste. Último testimonio:',unavailable:'El misterio de hoy no está disponible.',minimum:'Se podía resolver con {n} interrogatorios.',official:'Resultado oficial guardado.',practice:'Práctica: tu resultado oficial no cambia.',review:'REVISAR CASO',retry:'PRACTICAR',investigations:'MIS INVESTIGACIONES',menu:'MENÚ',solved:'CASO RESUELTO',unsolved:'CASO SIN RESOLVER',solvedText:'Encontraste al único vecino que mentía.',unsolvedText:'El asesino sigue en el barrio.'};
+englishCopy.daily={badge:'DAILY MYSTERY',practiceBadge:'PRACTICE',resume:'You pick up the investigation where you left it. Last testimony:',unavailable:"Today's mystery is not available.",minimum:'It could be solved with {n} questions.',official:'Official result saved.',practice:"Practice: your official result doesn't change.",review:'REVIEW CASE',retry:'PRACTICE',investigations:'MY INVESTIGATIONS',menu:'MENU',solved:'CASE SOLVED',unsolved:'CASE UNSOLVED',solvedText:'You found the only neighbor who was lying.',unsolvedText:'The murderer is still in the neighborhood.'};
+spanishCopy.review={prompt:'Caso cerrado. Tocá cualquier casa para leer su testimonio.',testimony:'Este vecino dijo:',murderer:'El asesino dijo:'};
+englishCopy.review={prompt:'Case closed. Tap any house to read its testimony.',testimony:'This neighbor said:',murderer:'The murderer said:'};
+spanishCopy.grades={
+  gold:{name:'Dorado',text:'Deducción perfecta: el mínimo de interrogatorios, sin errores ni ayudas.'},
+  green:{name:'Verde',text:'A un paso de la deducción perfecta.'},
+  blue:{name:'Celeste',text:'A dos pasos de la deducción perfecta.'},
+  gray:{name:'Gris',text:'Resuelto, con menos eficiencia.'},
+  red:{name:'Rojo',text:'Sin resolver.'},
+};
+englishCopy.grades={
+  gold:{name:'Gold',text:'Perfect deduction: the minimum questions, no mistakes, no help.'},
+  green:{name:'Green',text:'One step away from a perfect deduction.'},
+  blue:{name:'Light blue',text:'Two steps away from a perfect deduction.'},
+  gray:{name:'Gray',text:'Solved, less efficiently.'},
+  red:{name:'Red',text:'Unsolved.'},
+};
+spanishCopy.stats={eyebrow:'MIS INVESTIGACIONES',played:'Jugados',solved:'Resueltos',streak:'Racha actual',best:'Mejor racha',gold:'Dorados',points:'Puntos',prev:'Mes anterior',next:'Mes siguiente',future:'Todavía no llegó.',before:'No hubo misterio ese día.',unplayed:'Todavía no lo investigaste.',unplayedPast:'No lo investigaste. Podés practicarlo, sin puntaje.',inProgress:'Investigación en curso.',play:'INVESTIGAR',resume:'CONTINUAR',review:'REVISAR',practice:'PRACTICAR',score:'Puntos',questions:'Interrogatorios',minimum:'Mínimo teórico',lives:'Vidas',hint:'Pediste ayuda.',wrong:'Acusaciones fallidas: {n}.',guessed:'Acertaste sin deducción completa.',back:'VOLVER',today:'Hoy'};
+englishCopy.stats={eyebrow:'MY INVESTIGATIONS',played:'Played',solved:'Solved',streak:'Current streak',best:'Best streak',gold:'Gold',points:'Points',prev:'Previous month',next:'Next month',future:'Not here yet.',before:'There was no mystery that day.',unplayed:"You haven't investigated it yet.",unplayedPast:"You didn't investigate it. You can practice it, unscored.",inProgress:'Investigation in progress.',play:'INVESTIGATE',resume:'CONTINUE',review:'REVIEW',practice:'PRACTICE',score:'Points',questions:'Questions',minimum:'Theoretical minimum',lives:'Lives',hint:'You asked for help.',wrong:'Wrong accusations: {n}.',guessed:'Solved without a complete deduction.',back:'BACK',today:'Today'};
+spanishCopy.board={title:'CLASIFICACIÓN',today:'HOY',overall:'GENERAL',offline:'La clasificación global no está conectada. Tus resultados se guardan en este dispositivo.',loading:'Cargando…',empty:'Todavía no hay resultados.',error:'No se pudo cargar la clasificación.',you:'vos',anonymous:'Anónimo',name:'Nombre público',save:'GUARDAR',nameSaved:'Nombre guardado.',nameInvalid:'Entre 2 y 20 caracteres.',pending:'Resultado pendiente de envío.',rejected:'El servidor no aceptó el resultado.',accepted:'Resultado oficial registrado.',position:'Puesto',player:'Nombre',points:'Puntos'};
+englishCopy.board={title:'LEADERBOARD',today:'TODAY',overall:'OVERALL',offline:'The global leaderboard is not connected. Your results are saved on this device.',loading:'Loading…',empty:'No results yet.',error:'The leaderboard could not be loaded.',you:'you',anonymous:'Anonymous',name:'Public name',save:'SAVE',nameSaved:'Name saved.',nameInvalid:'Between 2 and 20 characters.',pending:'Result waiting to be sent.',rejected:'The server did not accept the result.',accepted:'Official result recorded.',position:'Rank',player:'Name',points:'Points'};
 const debugWords={
   seed:['SEED','SEED'],level:['NIVEL','LEVEL'],houses:['casas','houses'],murderer:['ASESINO REAL','ACTUAL MURDERER'],minimum:['PREGUNTAS MÍNIMAS','MINIMUM QUESTIONS'],sets:['CONJUNTOS MÍNIMOS POSIBLES','MINIMUM SOLVING SETS'],single:['REGLA: UNA PISTA NO RESUELVE','RULE: ONE CLUE CANNOT SOLVE'],reduction:['REDUCCIÓN MEDIA POR PISTA','AVERAGE REDUCTION PER CLUE'],redundancy:['REDUNDANCIA','REDUNDANCY'],families:['DISTRIBUCIÓN DE FAMILIAS','CLUE FAMILY DISTRIBUTION'],minFamilies:['FAMILIAS EN SOLUCIONES MÍNIMAS','FAMILIES IN MINIMUM SOLUTIONS'],compound:['COMPUESTAS','COMPOUND CLUES'],complexity:['COMPLEJIDAD MEDIA','AVERAGE COMPLEXITY'],areas:['ÁREAS DE CASAS','HOUSE AREAS'],sizes:['TAMAÑOS','SIZES'],lots:['lotes','lots'],properties:['PROPIEDADES GEOMÉTRICAS','GEOMETRIC PROPERTIES'],unique:['ÚNICA','UNIQUE'],uniqueProperties:['PROPIEDADES ÚNICAS','UNIQUE PROPERTIES'],warnings:['ALERTAS VISUALES','VISUAL WARNINGS'],none:['ninguna','none'],breaks:['TRAMOS INTERRUMPIDOS','MISSING STREET SEGMENTS'],grid:['TRAMA','GRID'],missing:['manzanas ausentes','missing blocks'],current:['ESTADO ACTUAL','CURRENT STATE'],questions:['interrogatorios','questions'],candidates:['CANDIDATOS ACTUALES','CURRENT CANDIDATES'],examples:['EJEMPLOS DE CONJUNTOS MÍNIMOS (HASTA 6)','MINIMUM SET EXAMPLES (UP TO 6)'],houseInfo:['INFORMACIÓN POR CASA','INFORMATION BY HOUSE'],lie:['MENTIRA','LIE'],truth:['VERDAD','TRUTH'],asked:['interrogada','questioned'],family:['familia','family'],predicate:['predicado','predicate'],inMinimum:['en conjunto mínimo','in minimum set'],yes:['sí','yes'],no:['no','no'],house:['casa','house'],area:['área','area'],fronts:['frentes','street-facing sides'],alone:['sola deja','alone leaves'],reduces:['reduce','reduces'],information:['información','information'],validating:['Validando…','Validating…'],tests:['pruebas internas','internal tests'],generated:['generados','generated'],valid:['válidos','valid'],invalid:['inválidos','invalid'],failed:['seeds fallidas','failed seeds'],reasons:['motivos','reasons'],door:['puerta','door'],doors:['ORIENTACIÓN DE LAS PUERTAS','DOOR ORIENTATION'],forced:['sin elección','forced'],coast:['COSTA','COAST'],avenue:['AVENIDA','AVENUE'],horizontal:['horizontal','horizontal'],vertical:['vertical','vertical'],crossesCity:['atraviesa el barrio','crosses the city'],outerBorder:['borde exterior','outer border'],graphIntact:['grafo lógico intacto','logic graph intact'],noAvenue:['ninguna calle elegible: no hay calle continua que atraviese el barrio ni recorra su contorno','no eligible street: no continuous street crosses the city or follows its outline'],pier:['calle al mar','street to the sea'],
 };
@@ -496,7 +558,7 @@ const COAST_PIER_RATIO = 1.15;   // cuánto entra al mar la calle decorativa, en
 function selectCoastSide(seed, levelNumber = 1) {
   return createRng(String(seed)+'|level:'+levelNumber+'|coast').pick(['left','right']);
 }
-function coastGeometry(map, side) {
+function coastGeometry(map, side, pierCount = 1) {
   if (side !== 'left' && side !== 'right') return null;
   const shore = side === 'left' ? map.x[0] : map.x.at(-1);
   const foamWidth = Math.max(10, map.cellSize * COAST_FOAM_RATIO);
@@ -509,29 +571,33 @@ function coastGeometry(map, side) {
     x: side === 'left' ? shore - foamWidth : shore, y: water.y,
     width: foamWidth, height: water.height,
   };
-  return { side, shore, water, foam, pier: coastPier(map, side, shore) };
+  const piers = coastPiers(map, side, shore, pierCount);
+  return { side, shore, water, foam, piers, pier: piers[0] || null };
 }
 
 // Una calle del borde costero se prolonga hacia el mar. Es solamente un trazo:
 // no hay lotes ni casas sobre ese tramo y no entra en map.roadSegments, así que
 // las distancias y las pistas de calle siguen viendo el mismo barrio de siempre.
-function coastPier(map, side, shore) {
+function coastPiers(map, side, shore, count) {
+  if (count < 1) return [];
   const column = side === 'left' ? 0 : map.cols - 1;
   const rows = [];
   for (let r = 0; r <= map.rows; r += 1) {
     const segment = map.roadSegments.find((s) => s.enabled && s.orientation === 'H' && s.c === column && s.r === r);
     if (segment) rows.push({ r, y: segment.y1, streetKey: segment.streetKey });
   }
-  if (!rows.length) return null;
-  // La del medio: la que menos se confunde con el borde exterior del barrio.
-  const chosen = rows[Math.floor(rows.length / 2)];
+  if (!rows.length) return [];
+  const wanted = Math.min(count, rows.length);
+  // Repartidas a lo largo de la costa: con una sola sale la del medio, como antes.
+  const picked = Array.from({ length: wanted }, (_, i) => rows[Math.round((i + 1) * rows.length / (wanted + 1) - .5)]);
   const length = map.cellSize * COAST_PIER_RATIO;
-  return {
-    streetKey: chosen.streetKey,
-    y: chosen.y,
+  const seen = new Set();
+  return picked.filter((row) => row && !seen.has(row.r) && seen.add(row.r)).map((row) => ({
+    streetKey: row.streetKey,
+    y: row.y,
     x1: shore,
     x2: side === 'left' ? shore - length : shore + length,
-  };
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1451,9 +1517,364 @@ function batchValidate(count = 100, { timed = false, prefix = 'batch', levelNumb
   return { generated: count, valid, invalid: count - valid, failures, reasons };
 }
 
+// ---- daily.js ----
+
+// Misterio diario. Todo lo que decide el caso de un día vive acá y es puro: sin
+// DOM, sin almacenamiento, sin idioma. Lo usan el juego y la función del servidor
+// que valida los resultados oficiales, así ambos calculan exactamente lo mismo.
+
+// Cada versión congela cómo se arma el caso de una fecha. Un día jugado con la
+// versión 1 se sigue regenerando con la versión 1 aunque después exista otra.
+// Para agregar una versión: sumar una entrada con su fecha de inicio y NO tocar
+// las anteriores. `verify-daily.cjs` guarda huellas de casos v1 para detectar
+// cualquier cambio del generador que altere desafíos ya publicados.
+const DAILY_VERSIONS = [
+  { version: 1, from: '2026-09-22', level: 55 },
+];
+
+const DAILY_EPOCH = DAILY_VERSIONS[0].from;
+
+// --- Fechas -----------------------------------------------------------------
+// Las fechas se manejan como 'YYYY-MM-DD' en la zona horaria del juego: ordenan
+// como texto y no dependen del reloj ni del huso del dispositivo.
+
+function zonedParts(now, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(now);
+    const get = (type) => Number(parts.find((p) => p.type === type)?.value);
+    const out = { year: get('year'), month: get('month'), day: get('day'), hour: get('hour') % 24, minute: get('minute'), second: get('second') };
+    if (Object.values(out).every(Number.isFinite)) return out;
+  } catch (_) { /* motor sin datos de zonas horarias */ }
+  // Respaldo: Argentina no usa horario de verano, UTC−3 fijo.
+  const shifted = new Date(now.getTime() + CONFIG.DAILY.FALLBACK_UTC_OFFSET_MIN * 60000);
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate(), hour: shifted.getUTCHours(), minute: shifted.getUTCMinutes(), second: shifted.getUTCSeconds() };
+}
+
+const pad = (n, width = 2) => String(n).padStart(width, '0');
+
+function dailyDateKey(now = new Date()) {
+  const p = zonedParts(now, CONFIG.DAILY.TIME_ZONE);
+  return `${pad(p.year, 4)}-${pad(p.month)}-${pad(p.day)}`;
+}
+
+// Milisegundos hasta la próxima medianoche de Buenos Aires.
+function msUntilNextDaily(now = new Date()) {
+  const p = zonedParts(now, CONFIG.DAILY.TIME_ZONE);
+  const elapsed = ((p.hour * 60 + p.minute) * 60 + p.second) * 1000 + now.getUTCMilliseconds();
+  return Math.max(0, 86400000 - elapsed);
+}
+
+function isDateKey(key) {
+  if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const d = new Date(`${key}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === key;
+}
+
+function shiftDateKey(key, days) {
+  const d = new Date(`${key}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// --- Seed y generación ------------------------------------------------------
+
+function dailyVersionFor(dateKey) {
+  if (!isDateKey(dateKey)) return null;
+  let found = null;
+  for (const entry of DAILY_VERSIONS) if (entry.from <= dateKey) found = entry;
+  return found;
+}
+
+// hash("daily-v1:DDMMYYYY:55"): la fecha en el orden del enunciado.
+function dailySeed(dateKey, entry = dailyVersionFor(dateKey)) {
+  if (!entry) throw new Error(`No hay misterio diario para ${dateKey}`);
+  const [y, m, d] = dateKey.split('-');
+  return String(hashString(`daily-v${entry.version}:${d}${m}${y}:${entry.level}`));
+}
+
+function generateDailyLevel(dateKey, version = null) {
+  const entry = version == null ? dailyVersionFor(dateKey) : DAILY_VERSIONS.find((e) => e.version === version && e.from <= dateKey) || null;
+  if (!entry) throw new Error(`No hay misterio diario para ${dateKey}`);
+  const seed = dailySeed(dateKey, entry);
+  const level = generateLevel(seed, { timed: false, levelNumber: entry.level });
+  // El generador ya valida, pero el diario es competitivo: se vuelve a exigir
+  // solución única y que ningún testimonio aislado identifique al asesino.
+  const verdict = validateGeneratedLevel(level);
+  if (!verdict.valid || level.metrics.singleClueUniqueCount !== 0) throw new Error(`Misterio diario inválido para ${dateKey}: ${verdict.reason || 'single_clue'}`);
+  level.daily = { date: dateKey, version: entry.version };
+  return { level, seed, version: entry.version, levelNumber: entry.level };
+}
+
+// Huella del problema lógico: mapa, testimonios y asesino. No incluye nada
+// cosmético, así que la costa o la avenida no la cambian.
+function dailyFingerprint(level) {
+  const houses = level.map.houses.map((h) => [h.id, h.rect.x, h.rect.y, h.rect.width, h.rect.height, h.clue.type, h.clue.params]);
+  const roads = level.map.roadSegments.filter((s) => s.enabled).map((s) => [s.x1, s.y1, s.x2, s.y2]);
+  return hashString(JSON.stringify({ m: level.murdererId, houses, roads })).toString(36);
+}
+
+// --- Partida y puntaje ------------------------------------------------------
+
+function dailyStartScore(levelNumber) {
+  return CONFIG.BASE_SCORE + (levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
+}
+
+const DAILY_GRADES = ['gold', 'green', 'blue', 'gray', 'red'];
+
+// Calificación: cuántas preguntas de más respecto del mínimo teórico del solver,
+// más un recargo por cada ayuda, acusación fallida o acierto sin deducción
+// completa. Umbrales y recargos viven en CONFIG.DAILY.GRADING.
+function gradeDaily({ won, questions, minimum, wrongAccusations = 0, hintUsed = false, deduced = false }) {
+  if (!won) return 'red';
+  const G = CONFIG.DAILY.GRADING;
+  const extra = Math.max(0, questions - minimum)
+    + wrongAccusations * G.WRONG_ACCUSATION
+    + (hintUsed ? G.HINT : 0)
+    + (deduced ? 0 : G.UNDEDUCED);
+  if (extra <= G.GOLD) return 'gold';
+  if (extra <= G.GREEN) return 'green';
+  if (extra <= G.BLUE) return 'blue';
+  return 'gray';
+}
+
+function invalid(reason) { return { valid: false, reason }; }
+
+// Reproduce el registro de acciones de una partida desde cero. Es la única fuente
+// del resultado oficial: el juego lo usa al terminar y el servidor lo usa para no
+// confiar en ningún número enviado por el navegador.
+//   { t: 'ask', id }      interrogar una casa
+//   { t: 'hint' }         pedir ayuda
+//   { t: 'accuse', id }   acusar una casa
+function replayDaily(level, log) {
+  if (!Array.isArray(log) || log.length > 200) return invalid('log');
+  const houses = new Map(level.map.houses.map((h) => [h.id, h]));
+  const asked = new Set();
+  const accused = new Set();
+  const observations = [];
+  let score = dailyStartScore(level.levelNumber);
+  let lives = CONFIG.STARTING_LIVES;
+  let hintUsed = false, wrongAccusations = 0, finished = false, won = false, deduced = false;
+  for (const ev of log) {
+    if (finished) return invalid('after_finish');
+    if (!ev || typeof ev !== 'object') return invalid('event');
+    if (ev.t === 'ask') {
+      const house = houses.get(ev.id);
+      if (!house || asked.has(ev.id)) return invalid('ask');
+      asked.add(ev.id);
+      observations.push({ houseId: house.id, clue: house.clue });
+      score -= CONFIG.INTERROGATION_COST;
+    } else if (ev.t === 'hint') {
+      if (hintUsed || score < CONFIG.HINT_COST) return invalid('hint');
+      hintUsed = true;
+      score -= CONFIG.HINT_COST;
+    } else if (ev.t === 'accuse') {
+      if (!houses.has(ev.id) || accused.has(ev.id)) return invalid('accuse');
+      if (ev.id === level.murdererId) {
+        const candidates = getConsistentCandidates(level, observations);
+        deduced = candidates.length === 1 && candidates[0] === level.murdererId;
+        won = true;
+        finished = true;
+      } else {
+        accused.add(ev.id);
+        wrongAccusations += 1;
+        score -= CONFIG.WRONG_ACCUSATION_COST;
+        lives -= 1;
+        if (lives <= 0) finished = true;
+      }
+    } else return invalid('event');
+  }
+  const questions = observations.length;
+  const minimum = level.metrics.minimumQuestions;
+  // Un acierto por descarte o por suerte no puede superar a una deducción: el
+  // recargo es mayor que lo que se ahorra preguntando menos que el mínimo.
+  const points = won ? Math.max(0, score - (deduced ? 0 : CONFIG.DAILY.UNDEDUCED_COST)) : 0;
+  return {
+    valid: true, finished, won, deduced, questions, minimum, wrongAccusations, hintUsed, lives,
+    score, points, grade: finished ? gradeDaily({ won, questions, minimum, wrongAccusations, hintUsed, deduced }) : null,
+    askedIds: [...asked], accusedIds: [...accused],
+  };
+}
+
+// --- Registros y estadísticas -----------------------------------------------
+
+const DAILY_STORAGE_PREFIX = 'vecindario.daily.';
+
+function dailyStorageKey(dateKey) { return DAILY_STORAGE_PREFIX + dateKey; }
+
+function readDailyRecord(storage, dateKey) {
+  try {
+    const raw = storage.getItem(dailyStorageKey(dateKey));
+    if (!raw) return null;
+    const record = JSON.parse(raw);
+    return record && record.date === dateKey && Array.isArray(record.log) ? record : null;
+  } catch (_) { return null; }
+}
+
+// El intento oficial se escribe una sola vez: de un registro terminado sólo puede
+// cambiar el estado de su envío al servidor, nunca el registro ni el resultado.
+function writeDailyRecord(storage, record) {
+  try {
+    const current = readDailyRecord(storage, record.date);
+    const next = current && current.status === 'finished' ? { ...current, submission: record.submission ?? current.submission } : record;
+    if (current && current.status === 'finished' && next.submission === current.submission) return false;
+    storage.setItem(dailyStorageKey(record.date), JSON.stringify(next));
+    return true;
+  } catch (_) { return false; }
+}
+
+function listDailyRecords(storage) {
+  const out = [];
+  try {
+    const keys = [];
+    for (let i = 0; i < storage.length; i += 1) keys.push(storage.key(i));
+    for (const key of keys) {
+      if (!key || !key.startsWith(DAILY_STORAGE_PREFIX)) continue;
+      const record = readDailyRecord(storage, key.slice(DAILY_STORAGE_PREFIX.length));
+      if (record) out.push(record);
+    }
+  } catch (_) { /* almacenamiento bloqueado */ }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function computeDailyStats(records, todayKey) {
+  const finished = records.filter((r) => r.status === 'finished' && r.result);
+  const solvedDays = new Set(finished.filter((r) => r.result.won).map((r) => r.date));
+  const stats = {
+    played: finished.length,
+    solved: solvedDays.size,
+    gold: finished.filter((r) => r.result.grade === 'gold').length,
+    points: finished.reduce((sum, r) => sum + (r.result.points || 0), 0),
+    currentStreak: 0,
+    bestStreak: 0,
+  };
+  let run = 0, prev = null;
+  for (const day of [...solvedDays].sort()) {
+    run = prev && shiftDateKey(prev, 1) === day ? run + 1 : 1;
+    stats.bestStreak = Math.max(stats.bestStreak, run);
+    prev = day;
+  }
+  // La racha actual cuenta hasta hoy; si hoy todavía no se resolvió, hasta ayer.
+  let cursor = solvedDays.has(todayKey) ? todayKey : shiftDateKey(todayKey, -1);
+  while (solvedDays.has(cursor)) { stats.currentStreak += 1; cursor = shiftDateKey(cursor, -1); }
+  return stats;
+}
+
+// ---- online.js ----
+
+// Clasificación global sobre Supabase, sin librerías: autenticación anónima
+// persistente, envío del registro de acciones a una función del servidor que
+// recalcula el resultado, y lectura de dos vistas públicas. Si CONFIG.ONLINE no
+// tiene URL ni clave, nada de esto se usa y el juego no muestra tablas.
+
+const SESSION_KEY = 'vecindario.online.session';
+
+function onlineEnabled() {
+  return Boolean(CONFIG.ONLINE.SUPABASE_URL && CONFIG.ONLINE.SUPABASE_ANON_KEY);
+}
+
+function readSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
+}
+
+function saveSession(session) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (_) { /* sin almacenamiento: sesión efímera */ }
+}
+
+class OnlineClient {
+  constructor() {
+    this.base = CONFIG.ONLINE.SUPABASE_URL.replace(/\/+$/, '');
+    this.key = CONFIG.ONLINE.SUPABASE_ANON_KEY;
+    this.session = readSession();
+  }
+
+  get userId() { return this.session?.user?.id || null; }
+
+  async request(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
+    const h = { apikey: this.key, 'Content-Type': 'application/json', ...headers };
+    if (auth) h.Authorization = `Bearer ${(await this.ensureSession()).access_token}`;
+    const res = await fetch(this.base + path, { method, headers: h, body: body == null ? undefined : JSON.stringify(body) });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
+    if (!res.ok) {
+      const error = new Error(data?.error || data?.message || data?.msg || `HTTP ${res.status}`);
+      error.status = res.status;
+      error.code = data?.code || null;
+      throw error;
+    }
+    return data;
+  }
+
+  // Identidad persistente: una cuenta anónima de Supabase por navegador. Hay que
+  // habilitar "Anonymous sign-ins" en el proyecto.
+  async ensureSession() {
+    const s = this.session;
+    const now = Math.floor(Date.now() / 1000);
+    if (s?.access_token && s.expires_at && s.expires_at - 60 > now) return s;
+    let next;
+    if (s?.refresh_token) {
+      try { next = await this.request('/auth/v1/token?grant_type=refresh_token', { method: 'POST', auth: false, body: { refresh_token: s.refresh_token } }); } catch (_) { next = null; }
+    }
+    if (!next) next = await this.request('/auth/v1/signup', { method: 'POST', auth: false, body: { data: {} } });
+    if (!next.expires_at && next.expires_in) next.expires_at = now + next.expires_in;
+    this.session = next;
+    saveSession(next);
+    return next;
+  }
+
+  // El navegador sólo manda la fecha, la versión y lo que hizo. El puntaje, las
+  // vidas y la calificación los calcula el servidor.
+  submitDaily({ date, version, log }) {
+    return this.request('/functions/v1/daily-submit', { method: 'POST', body: { date, version, log } });
+  }
+
+  todayBoard(date) {
+    const n = CONFIG.ONLINE.LEADERBOARD_SIZE;
+    return this.request(`/rest/v1/daily_leaderboard?date_key=eq.${encodeURIComponent(date)}&order=position.asc&limit=${n}`);
+  }
+
+  overallBoard() {
+    const n = CONFIG.ONLINE.LEADERBOARD_SIZE;
+    return this.request(`/rest/v1/overall_leaderboard?order=position.asc&limit=${n}`);
+  }
+
+  // La posición propia puede quedar fuera del top: se pide aparte.
+  async myRows(date) {
+    const id = (await this.ensureSession()).user?.id;
+    if (!id) return { today: null, overall: null };
+    const [today, overall] = await Promise.all([
+      this.request(`/rest/v1/daily_leaderboard?date_key=eq.${encodeURIComponent(date)}&user_id=eq.${id}`),
+      this.request(`/rest/v1/overall_leaderboard?user_id=eq.${id}`),
+    ]);
+    return { today: today?.[0] || null, overall: overall?.[0] || null };
+  }
+
+  async profile() {
+    const id = (await this.ensureSession()).user?.id;
+    const rows = id ? await this.request(`/rest/v1/profiles?id=eq.${id}&select=display_name`) : [];
+    return rows?.[0] || null;
+  }
+
+  setName(name) {
+    return this.request('/rest/v1/rpc/set_display_name', { method: 'POST', body: { new_name: name } });
+  }
+}
+
 // ---- game.js ----
 
 const UNLOCK_PREFIX = UNLOCK_NAMESPACE;
+
+// Todo lo que describe una partida en curso. Campaña y diario tienen cada uno el
+// suyo; al cambiar de modo se guarda uno y se restaura el otro, sin mezclarlos.
+const SESSION_FIELDS = ['seed', 'levelNumber', 'timed', 'level', 'score', 'lives', 'currentHour', 'observations', 'selectedHouseId',
+  'pendingAccusationId', 'hintUsed', 'finished', 'revealedMurderer', 'lastOutcomeWon', 'prepared', 'mode', 'daily'];
+
+function dailyStorage() {
+  try { return typeof localStorage === 'undefined' ? null : localStorage; } catch (_) { return null; }
+}
 
 function safeGetTheme() {
   try {
@@ -1476,6 +1897,16 @@ const COASTAL_ID = 'coastal';
 const COASTAL_PREF = 'vecindario.style.coastal';
 const CAR_ID = 'car';
 const CAR_PREF = 'vecindario.style.car';
+const CAR_COUNT_KEY = 'vecindario.count.car';
+const PIER_COUNT_KEY = 'vecindario.count.pier';
+
+function safeReadCount(key, max) {
+  try { return Math.min(max, Math.max(0, Math.floor(Number(localStorage.getItem(key)) || 0))); } catch (_) { return 0; }
+}
+
+function safeSaveCount(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch (_) { /* file:// can block storage */ }
+}
 const AVENUE_ID = 'avenue';
 const AVENUE_PREF = 'vecindario.style.avenue';
 
@@ -1501,6 +1932,8 @@ function safeClearUnlocks() {
     localStorage.removeItem(AVENUE_PREF);
     localStorage.removeItem(UNLOCK_PREFIX + CAR_ID);
     localStorage.removeItem(CAR_PREF);
+    localStorage.removeItem(CAR_COUNT_KEY);
+    localStorage.removeItem(PIER_COUNT_KEY);
     localStorage.removeItem('vecindario-theme');
   } catch (_) { /* file:// can block storage */ }
 }
@@ -1511,8 +1944,8 @@ class Game {
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
     this.debug = debug;
-    this.pendingMode = 'normal';
-    this.mode = 'normal';
+    this.pendingMode = CONFIG.DEBUG ? CONFIG.DEBUG_MODE : 'normal';
+    this.mode = this.pendingMode;
     this.unlockedThemes = new Set(FREE_THEME_IDS);
     for (const theme of THEMES) if (theme.cost > 0 && safeReadUnlock(theme.id)) this.unlockedThemes.add(theme.id);
     this.theme = safeGetTheme();
@@ -1523,29 +1956,245 @@ class Game {
     this.avenueEnabled = this.avenueUnlocked && safeReadStyle(AVENUE_PREF);
     this.carUnlocked = safeReadUnlock(CAR_ID);
     this.carEnabled = this.carUnlocked && safeReadStyle(CAR_PREF);
+    // Cantidades: el primer auto y el primer puerto vienen con su mejora.
+    this.carCount = this.carUnlocked ? Math.max(1, safeReadCount(CAR_COUNT_KEY, CONFIG.CAR_MAX)) : 0;
+    this.pierCount = this.coastalUnlocked ? Math.max(1, safeReadCount(PIER_COUNT_KEY, CONFIG.PIER_MAX)) : 0;
     this.shopOpen=false;
     this.lastOutcomeWon = false;
+    this.context = 'campaign';
+    this.daily = null;
+    this.campaignStarted = false;
+    this.campaignSession = null;
     this.audio = new AudioManager();
     this.ui = new UI(this);
     this.ui.bind();
     this.loadLevel(this.seed, { timed, levelNumber: this.levelNumber });
+    this.ui.showHome?.();
   }
+
+  get isDaily() { return this.context === 'daily'; }
+
+  // En desarrollo la tienda se abre en cualquier momento; en el juego real, solo
+  // después de resolver un caso. En el diario nunca: nadie compra ventajas.
+  canUseShop() { return !this.isDaily && Boolean(CONFIG.DEBUG || (this.finished && this.lastOutcomeWon)); }
+
+  // --- Campaña y diario -------------------------------------------------------
+
+  snapshotSession() {
+    const s = {};
+    for (const key of SESSION_FIELDS) s[key] = this[key];
+    s.prompt = [this.ui.promptKey, this.ui.promptClue];
+    s.endResult = this.ui.endResult;
+    return s;
+  }
+
+  restoreSession(s) {
+    for (const key of SESSION_FIELDS) this[key] = s[key];
+    this.losingLife = false;
+    this.shopOpen = false;
+    this.ui.showShop(false);
+    this.ui.hideEnd();
+    this.ui.renderMap(this.level);
+    this.ui.setPrompt(...(s.prompt || ['']));
+    this.ui.endResult = s.endResult;
+    this.ui.refresh();
+  }
+
+  // Vuelve al menú sin tocar la partida: queda tal cual detrás de la pantalla inicial.
+  goHome() {
+    if (this.pendingAccusationId) this.cancelAccusation();
+    if (this.shopOpen) { this.shopOpen = false; this.ui.showShop(false); }
+    this.ui.hideEnd();
+    this.ui.hideStartModal();
+    this.ui.showHome?.();
+  }
+
+  openCampaign() {
+    if (this.isDaily) {
+      this.context = 'campaign';
+      if (this.campaignSession) this.restoreSession(this.campaignSession);
+      this.campaignSession = null;
+    }
+    this.ui.hideHome?.();
+    if (!this.campaignStarted) { this.ui.showStartModal(); this.ui.refresh(); return; }
+    if (this.finished && this.ui.endResult && !this.shopOpen) this.ui.reopenEnd();
+    this.ui.refresh();
+  }
+
+  todayKey() { return dailyDateKey(new Date()); }
+
+  dailyRecord(dateKey) { const s = dailyStorage(); return s ? readDailyRecord(s, dateKey) : null; }
+
+  dailyRecords() { const s = dailyStorage(); return s ? listDailyRecords(s) : []; }
+
+  dailyStats() { return computeDailyStats(this.dailyRecords(), this.todayKey()); }
+
+  // Abre el caso de una fecha. Sólo el de hoy puede ser intento oficial; un día
+  // ya jugado se abre para revisarlo; uno pasado sin jugar, como práctica.
+  openDaily(dateKey = this.todayKey(), { practice = false } = {}) {
+    const today = this.todayKey();
+    if (!dailyVersionFor(dateKey) || dateKey > today) return false;
+    const stored = this.dailyRecord(dateKey);
+    const official = !practice && (stored || dateKey === today);
+    let record = official ? stored : null;
+    let built;
+    try { built = generateDailyLevel(dateKey, record?.version ?? null); }
+    catch (error) { console.error(error); this.ui.setPrompt?.('daily.unavailable'); return false; }
+    if (!this.isDaily) this.campaignSession = this.snapshotSession();
+    if (official && !record) {
+      record = { schema: 1, date: dateKey, version: built.version, seed: built.seed, log: [], marks: {}, status: 'playing', result: null, startedAt: new Date().toISOString(), finishedAt: null, submission: null };
+    }
+    this.context = 'daily';
+    this.daily = { date: dateKey, version: built.version, practice: !official, record, log: record ? record.log : [] };
+    this.score = dailyStartScore(built.levelNumber);
+    this.lives = CONFIG.STARTING_LIVES;
+    this.prepared = null;
+    // El diario siempre es lógica pura: todos parten de las mismas condiciones.
+    this.mode = 'normal';
+    this.loadLevel(built.seed, { timed: false, levelNumber: built.levelNumber, prepared: built.level });
+    if (record) this.applyDailyRecord(record);
+    this.ui.toggleLogicPanel?.(false);
+    this.ui.hideStartModal();
+    this.ui.hideHome?.();
+    this.ui.refresh();
+    if (this.finished) this.ui.showDailyEnd?.(this.dailyResult());
+    return true;
+  }
+
+  // Reconstruye la partida guardada: los mismos interrogatorios, ayudas y
+  // acusaciones en el mismo orden, y después las marcas.
+  applyDailyRecord(record) {
+    const result = replayDaily(this.level, record.log);
+    if (!result.valid) { record.log.length = 0; return; }
+    const byId = new Map(this.level.map.houses.map((h) => [h.id, h]));
+    for (const ev of record.log) {
+      const house = byId.get(ev.id);
+      if (ev.t === 'ask') { house.asked = true; this.observations.push({ houseId: house.id, clue: house.clue }); }
+      else if (ev.t === 'hint') this.hintUsed = true;
+      else if (ev.t === 'accuse' && ev.id !== this.level.murdererId) { house.confirmedInnocent = true; house.mark = 'cleared'; }
+    }
+    for (const [id, mark] of Object.entries(record.marks || {})) {
+      const house = byId.get(id);
+      if (house && !house.confirmedInnocent && ['suspect', 'cleared'].includes(mark)) house.mark = mark;
+    }
+    this.score = result.finished ? result.points : result.score;
+    this.lives = result.lives;
+    if (result.finished) {
+      this.finished = true;
+      this.revealedMurderer = true;
+      this.lastOutcomeWon = result.won;
+      this.ui.setPrompt('review.prompt');
+    } else if (this.observations.length) {
+      const last = this.observations.at(-1);
+      this.ui.setPrompt('daily.resume', last.clue);
+    }
+  }
+
+  dailyResult() {
+    if (!this.daily) return null;
+    const result = replayDaily(this.level, this.daily.log);
+    return { ...result, date: this.daily.date, practice: this.daily.practice };
+  }
+
+  recordDaily(event) {
+    if (!this.isDaily || !this.daily) return;
+    this.daily.log.push(event);
+    this.saveDaily();
+  }
+
+  saveDaily() {
+    const record = this.daily?.record;
+    const storage = dailyStorage();
+    if (!record || !storage || record.status === 'finished') return;
+    record.marks = Object.fromEntries(this.level.map.houses.filter((h) => h.mark && !h.confirmedInnocent).map((h) => [h.id, h.mark]));
+    record.snapshot = { score: this.score, lives: this.lives, questions: this.observations.length };
+    writeDailyRecord(storage, record);
+  }
+
+  // Cierre del caso diario: el resultado sale de reproducir el registro, no del
+  // estado en pantalla. El intento oficial se guarda una única vez.
+  finishDaily() {
+    const result = this.dailyResult();
+    this.score = result.points;
+    const record = this.daily.record;
+    const storage = dailyStorage();
+    if (record && record.status !== 'finished') {
+      this.saveDaily();
+      record.status = 'finished';
+      record.finishedAt = new Date().toISOString();
+      record.result = { won: result.won, deduced: result.deduced, points: result.points, questions: result.questions, minimum: result.minimum, lives: result.lives, wrongAccusations: result.wrongAccusations, hintUsed: result.hintUsed, grade: result.grade };
+      if (storage) writeDailyRecord(storage, record);
+      this.submitDaily(record);
+    }
+    return result;
+  }
+
+  // Envío al servidor, si hay uno configurado. Sin servidor, no se simula nada.
+  async submitDaily(record) {
+    if (!onlineEnabled() || !record || record.status !== 'finished' || record.submission?.status === 'accepted') return null;
+    this.online ??= new OnlineClient();
+    let submission;
+    try {
+      const response = await this.online.submitDaily({ date: record.date, version: record.version, log: record.log });
+      submission = { status: 'accepted', points: response?.points ?? null, at: new Date().toISOString() };
+    } catch (error) {
+      // 409: ese día ya tiene resultado oficial en el servidor. Cuenta como enviado.
+      submission = error.status === 409 ? { status: 'accepted', at: new Date().toISOString(), duplicate: true }
+        : error.status === 422 || error.status === 400 ? { status: 'rejected', reason: error.message }
+        : { status: 'pending', reason: error.message };
+    }
+    record.submission = submission;
+    const storage = dailyStorage();
+    if (storage) writeDailyRecord(storage, record);
+    this.ui.refreshInvestigations?.();
+    return submission;
+  }
+
+  // Reintenta los envíos que quedaron pendientes por falta de conexión.
+  retryPendingSubmissions() {
+    if (!onlineEnabled()) return;
+    for (const record of this.dailyRecords()) {
+      if (record.status === 'finished' && (!record.submission || record.submission.status === 'pending')) this.submitDaily(record);
+    }
+  }
+
+  // Revisión: con el caso cerrado se puede leer el testimonio de cualquier casa.
+  reviewHouse(id) {
+    this.selectedHouseId = id;
+    const house = this.selectedHouse;
+    if (house) { this.ui.setPrompt(house.id === this.level.murdererId ? 'review.murderer' : 'review.testimony', house.clue); this.ui.highlightClue(house.clue); }
+    this.ui.refresh();
+  }
+
+  reviewDaily() { this.ui.hideEnd(); this.ui.setPrompt('review.prompt'); this.ui.refresh(); }
+
+  practiceDaily() { if (this.daily) this.openDaily(this.daily.date, { practice: true }); }
+
+  openInvestigations(from = null) { this.ui.showInvestigations?.(from); }
 
   get selectedHouse() { return this.level?.map.houses.find((h) => h.id === this.selectedHouseId) || null; }
 
-  loadLevel(seed, { timed = false, levelNumber = this.levelNumber } = {}) {
+  // Capa estética: se aplica siempre en el momento de mostrar el barrio, así un
+  // barrio pregenerado respeta las mejoras compradas después de generarlo.
+  applyCosmetics(level, seed, levelNumber) {
+    // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
+    // caso con costa o sin ella.
+    level.coastSide = this.coastalEnabled ? selectCoastSide(seed, levelNumber) : null;
+    // Sorteo visual independiente: la misma seed con
+    // la misma configuración elige siempre la misma calle.
+    level.avenue = this.avenueEnabled ? avenueStreet(level.map, { seed: `${seed}|level:${levelNumber}`, coastSide: level.coastSide, exclude: this.avenueExclusions(level) }) : null;
+    level.carEnabled = Boolean(this.carEnabled);
+    level.carCount = this.carCount;
+    level.pierCount = this.pierCount;
+    return level;
+  }
+
+  loadLevel(seed, { timed = false, levelNumber = this.levelNumber, prepared = null } = {}) {
     this.seed = seed;
     this.levelNumber = Math.max(1, Math.floor(Number(levelNumber) || 1));
     this.timed = timed;
-    this.level = generateLevel(seed, { timed, levelNumber: this.levelNumber });
-    // Estética únicamente, y con su propia tirada: la misma seed produce el mismo
-    // caso con costa o sin ella.
-    this.level.coastSide = this.coastalEnabled ? selectCoastSide(seed, this.levelNumber) : null;
-    // Sorteo visual independiente: la misma seed con
-    // la misma configuración elige siempre la misma calle.
-    this.level.avenue = this.avenueEnabled ? avenueStreet(this.level.map, { seed: `${seed}|level:${this.levelNumber}`, coastSide: this.level.coastSide, exclude: this.avenueExclusions() }) : null;
-    this.level.carEnabled = Boolean(this.carEnabled);
-    this.score ??= CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
+    this.level = this.applyCosmetics(prepared || generateLevel(seed, { timed, levelNumber: this.levelNumber }), seed, this.levelNumber);
+    this.score ??= CONFIG.DEBUG ? CONFIG.DEBUG_SCORE : CONFIG.BASE_SCORE + (this.levelNumber - 1) * CONFIG.SCORE_PER_LEVEL;
     this.shopOpen=false;
     this.ui.showShop(false);
     this.lives ??= CONFIG.STARTING_LIVES;
@@ -1566,6 +2215,7 @@ class Game {
 
   start(mode = 'normal') {
     this.mode = mode;
+    this.campaignStarted = true;
     this.ui.hideStartModal();
     this.ui.setPrompt(mode === 'assist'
       ? 'investigation.assist' : 'investigation.entry');
@@ -1573,6 +2223,7 @@ class Game {
   }
 
   selectHouse(id) {
+    if (this.finished && this.isDaily) { this.reviewHouse(id); return; }
     if (this.finished) return;
     this.audio.select();
     this.selectedHouseId = id;
@@ -1593,6 +2244,7 @@ class Game {
     h.asked = true;
     this.observations.push({ houseId: h.id, clue: h.clue });
     this.score -= CONFIG.INTERROGATION_COST;
+    this.recordDaily({ t: 'ask', id: h.id });
     this.audio.interrogate();
     this.ui.setPrompt(pickDecorativeKey('interrogationOpeners'), h.clue);
     this.ui.highlightClue(h.clue);
@@ -1611,6 +2263,7 @@ class Game {
     if (!h || this.finished) return;
     if (h.confirmedInnocent && mark === 'suspect') return;
     h.mark = h.mark === mark ? null : mark;
+    if (this.isDaily) this.saveDaily();
     this.audio.mark();
     this.ui.refresh();
   }
@@ -1634,15 +2287,21 @@ class Game {
     if (!id || this.finished || this.losingLife) return;
     this.ui.showAccuseModal(false);
     this.pendingAccusationId = null;
+    this.recordDaily({ t: 'accuse', id });
     if (id === this.level.murdererId) {
       this.finished = true;
       this.revealedMurderer = true;
       this.lastOutcomeWon = true;
       this.audio.solve();
+      const daily = this.isDaily ? this.finishDaily() : null;
+      if (!daily) this.prepareNextLevel();
       this.ui.setPrompt('');
       this.ui.refresh();
       await this.ui.playResolution();
-      setTimeout(() => this.ui.showEnd({ won: true, score: this.score, questions: this.observations.length, lives: this.lives }), 280);
+      setTimeout(() => {
+        if (daily) { this.ui.setPrompt('review.prompt'); this.ui.showDailyEnd(daily); }
+        else this.ui.showEnd({ won: true, score: this.score, questions: this.observations.length, lives: this.lives });
+      }, 280);
       return;
     }
     const house = this.level.map.houses.find((h) => h.id === id);
@@ -1659,10 +2318,15 @@ class Game {
       this.finished = true;
       this.revealedMurderer = true;
       this.lastOutcomeWon = false;
+      const daily = this.isDaily ? this.finishDaily() : null;
       this.ui.setPrompt('defeat.reveal');
       this.ui.refresh();
-      setTimeout(() => this.ui.showEnd({ won: false, score: this.score, questions: this.observations.length, lives: 0 }), 450);
+      setTimeout(() => {
+        if (daily) this.ui.showDailyEnd(daily);
+        else this.ui.showEnd({ won: false, score: this.score, questions: this.observations.length, lives: 0 });
+      }, 450);
     } else {
+      if (this.isDaily) this.saveDaily();
       this.ui.setPrompt(pickDecorativeKey('accusation.wrong'));
       this.ui.refresh();
     }
@@ -1678,6 +2342,7 @@ class Game {
     }
     this.hintUsed = true;
     this.score -= CONFIG.HINT_COST;
+    this.recordDaily({ t: 'hint' });
     this.selectedHouseId = hint.houseId;
     this.ui.setPrompt('help.suggest');
     this.ui.pulseHint(hint.houseId);
@@ -1687,6 +2352,7 @@ class Game {
   toggleSound() { this.audio.toggle(); this.ui.refresh(); }
 
   buyLife() {
+    if (this.isDaily) return false;
     if ((this.finished && !this.shopOpen) || this.losingLife || this.lives >= CONFIG.STARTING_LIVES || this.score < CONFIG.LIFE_COST) return false;
     this.score -= CONFIG.LIFE_COST;
     this.lives += 1;
@@ -1709,7 +2375,7 @@ class Game {
 
   canBuyTheme(id) {
     const theme = themeById(id);
-    return Boolean(theme && theme.cost > 0 && this.shopOpen && this.lastOutcomeWon
+    return Boolean(theme && theme.cost > 0 && this.shopOpen && this.canUseShop()
       && !this.unlockedThemes.has(id) && this.score >= theme.cost);
   }
 
@@ -1733,7 +2399,7 @@ class Game {
   buySunset() { return this.buyTheme('sunset'); }
 
   canBuyCoastal() {
-    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.coastalUnlocked && this.score >= CONFIG.COASTAL_COST);
+    return Boolean(this.shopOpen && this.canUseShop() && !this.coastalUnlocked && this.score >= CONFIG.COASTAL_COST);
   }
 
   buyCoastal() {
@@ -1741,6 +2407,8 @@ class Game {
     this.score -= CONFIG.COASTAL_COST;
     this.coastalUnlocked = true;
     safeSaveUnlock(COASTAL_ID);
+    this.pierCount = 1;
+    safeSaveCount(PIER_COUNT_KEY, 1);
     this.setCoastal(true);
     return true;
   }
@@ -1758,16 +2426,16 @@ class Game {
 
   // Con costa activa: nunca una avenida de borde sobre el mar, ni sobre la calle
   // que desemboca en él, para no tapar la espuma ni el puerto decorativo.
-  avenueExclusions() {
-    if (!this.level?.coastSide) return [];
-    const map = this.level.map;
-    const shoreStreet = this.level.coastSide === 'left' ? 'V0' : `V${map.cols}`;
-    const pier = coastGeometry(map, this.level.coastSide)?.pier?.streetKey;
-    return pier ? [shoreStreet, pier] : [shoreStreet];
+  avenueExclusions(level = this.level) {
+    if (!level?.coastSide) return [];
+    const map = level.map;
+    const shoreStreet = level.coastSide === 'left' ? 'V0' : `V${map.cols}`;
+    const piers = coastGeometry(map, level.coastSide, this.pierCount || 1)?.piers || [];
+    return [shoreStreet, ...piers.map((p) => p.streetKey)];
   }
 
   canBuyAvenue() {
-    return Boolean(this.shopOpen && this.lastOutcomeWon && !this.avenueUnlocked && this.score >= CONFIG.AVENUE_COST);
+    return Boolean(this.shopOpen && this.canUseShop() && !this.avenueUnlocked && this.score >= CONFIG.AVENUE_COST);
   }
 
   buyAvenue() {
@@ -1789,12 +2457,14 @@ class Game {
 
   toggleAvenue() { return this.setAvenue(!this.avenueEnabled); }
 
-  canBuyCar() { return Boolean(this.shopOpen && this.lastOutcomeWon && !this.carUnlocked && this.score >= CONFIG.CAR_COST); }
+  canBuyCar() { return Boolean(this.shopOpen && this.canUseShop() && !this.carUnlocked && this.score >= CONFIG.CAR_COST); }
   buyCar() {
     if (!this.canBuyCar()) return false;
     this.score -= CONFIG.CAR_COST;
     this.carUnlocked = true;
     safeSaveUnlock(CAR_ID);
+    this.carCount = 1;
+    safeSaveCount(CAR_COUNT_KEY, 1);
     this.setCar(true);
     return true;
   }
@@ -1807,6 +2477,44 @@ class Game {
   }
   toggleCar() { return this.setCar(!this.carEnabled); }
 
+  // --- Vista uniforme de las mejoras, para que la tienda no repita lógica ------
+  upgradeCost(id) { return { coastal: CONFIG.COASTAL_COST, avenue: CONFIG.AVENUE_COST, car: CONFIG.CAR_COST }[id]; }
+
+  isUpgradeOwned(id) { return Boolean({ coastal: this.coastalUnlocked, avenue: this.avenueUnlocked, car: this.carUnlocked }[id]); }
+
+  isUpgradeEnabled(id) { return Boolean({ coastal: this.coastalEnabled, avenue: this.avenueEnabled, car: this.carEnabled }[id]); }
+
+  canBuyUpgrade(id) { return { coastal: this.canBuyCoastal(), avenue: this.canBuyAvenue(), car: this.canBuyCar() }[id]; }
+
+  buyUpgrade(id) { return { coastal: () => this.buyCoastal(), avenue: () => this.buyAvenue(), car: () => this.buyCar() }[id](); }
+
+  setUpgrade(id, on) { return { coastal: () => this.setCoastal(on), avenue: () => this.setAvenue(on), car: () => this.setCar(on) }[id](); }
+
+  toggleUpgrade(id) { return this.setUpgrade(id, !this.isUpgradeEnabled(id)); }
+
+  // --- Agregados: autos y puertos, hasta tres de cada uno ----------------------
+  extraMax(id) { return id === 'car' ? CONFIG.CAR_MAX : CONFIG.PIER_MAX; }
+
+  extraCount(id) { return id === 'car' ? this.carCount : this.pierCount; }
+
+  extraCost(id) { return id === 'car' ? CONFIG.CAR_EXTRA_COST : CONFIG.PIER_COST; }
+
+  canBuyExtra(id) {
+    const owner = id === 'car' ? 'car' : 'coastal';
+    return Boolean(this.shopOpen && this.canUseShop() && this.isUpgradeOwned(owner)
+      && this.extraCount(id) < this.extraMax(id) && this.score >= this.extraCost(id));
+  }
+
+  buyExtra(id) {
+    if (!this.canBuyExtra(id)) return false;
+    this.score -= this.extraCost(id);
+    const next = this.extraCount(id) + 1;
+    if (id === 'car') { this.carCount = next; safeSaveCount(CAR_COUNT_KEY, next); }
+    else { this.pierCount = next; safeSaveCount(PIER_COUNT_KEY, next); }
+    this.ui.refresh();
+    return true;
+  }
+
   resetUnlocks() {
     safeClearUnlocks();
     this.coastalUnlocked = false;
@@ -1815,6 +2523,8 @@ class Game {
     this.avenueEnabled = false;
     this.carUnlocked = false;
     this.carEnabled = false;
+    this.carCount = 0;
+    this.pierCount = 0;
     this.unlockedThemes = new Set(FREE_THEME_IDS);
     if (!this.unlockedThemes.has(this.theme)) this.theme = 'day';
     safeSaveTheme(this.theme);
@@ -1822,7 +2532,7 @@ class Game {
   }
 
   openShop() {
-    if(!this.finished || !this.lastOutcomeWon) return;
+    if(!this.canUseShop()) return;
     this.shopOpen=true;
     this.ui.hideEnd();
     this.ui.showShop(true);
@@ -1839,6 +2549,8 @@ class Game {
   }
 
   retry() {
+    // En el diario, reintentar es práctica: el resultado oficial no se toca.
+    if (this.isDaily) { this.practiceDaily(); return; }
     if (this.finished && this.lives === 0) { this.lives = CONFIG.STARTING_LIVES; this.score=undefined; }
     const mode = this.mode;
     this.loadLevel(this.seed, { timed: this.timed, levelNumber: this.levelNumber });
@@ -1868,27 +2580,45 @@ class Game {
     this.ui.refresh();
   }
 
+  // El barrio siguiente se genera y valida mientras se ve la pantalla de victoria,
+  // para que la transición no tenga que esperar al generador.
+  prepareNextLevel() {
+    const levelNumber = this.levelNumber + 1;
+    const seed = randomSeed();
+    try {
+      this.prepared = { seed, levelNumber, level: generateLevel(seed, { timed: false, levelNumber }) };
+    } catch (_) { this.prepared = null; }
+  }
+
   // Se puede avanzar directamente desde el final del caso, con o sin pasar por la tienda.
   nextLevel() {
-    if(!this.finished || !this.lastOutcomeWon) return;
+    if(!this.canUseShop() || this.transitioning) return;
     const mode = this.mode;
+    const prep = this.prepared;
+    this.prepared = null;
     const nextLevelNumber = this.levelNumber + 1;
+    const usable = prep && prep.levelNumber === nextLevelNumber;
+    const nextSeed = usable ? prep.seed : randomSeed();
     // Keep unspent points and grant the existing next-level starting allocation once.
     this.score = Math.max(0,this.score) + CONFIG.BASE_SCORE + (nextLevelNumber-1)*CONFIG.SCORE_PER_LEVEL;
-    const nextSeed = randomSeed();
     this.updateUrl(nextSeed, nextLevelNumber, false);
-    this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber });
-    this.mode = mode;
-    this.ui.hideStartModal();
-    this.ui.refresh();
+    this.transitioning = true;
+    this.ui.slideScene(() => {
+      this.loadLevel(nextSeed, { timed: false, levelNumber: nextLevelNumber, prepared: usable ? prep.level : null });
+      this.mode = mode;
+      this.ui.hideStartModal();
+      this.ui.refresh();
+    }, () => { this.transitioning = false; });
   }
 
   advanceOrNew() {
+    if (this.isDaily) { this.openInvestigations('end'); return; }
     if (this.lastOutcomeWon) this.nextLevel();
     else this.newGame();
   }
 
   runBatchDebug() {
+    if (this.isDaily) return;
     this.ui.el.debugBatchOutput.textContent = t('debug.validating');
     setTimeout(() => {
       const tests = runInternalTests();
@@ -1899,6 +2629,7 @@ class Game {
   }
 
   loadTimedDemo() {
+    if (this.isDaily) return;
     const seed = 'night-demo';
     this.updateUrl(seed, Math.max(1, this.levelNumber), true);
     this.loadLevel(seed, { timed: true, levelNumber: Math.max(1, this.levelNumber) });
@@ -2014,18 +2745,40 @@ function createCarRoute(map, avenue, seed) {
   return {initial,next};
 }
 
-function mountCar(svg,map,avenue,seed) {
+const CAR_ACROSS=4;        // ancho del dibujo en unidades de diseño, de rueda a rueda
+const CAR_LANE_FILL=.85;   // porción del ancho de calzada que ocupa el auto
+
+// Varios autos a la vez: cada uno con su propia ruta (semilla distinta) y su color
+// en orden fijo. Devuelve una sola función que los desmonta a todos.
+function mountCars(svg,map,avenue,seed,count=1) {
+  const disposers=[];
+  for(let i=0;i<count;i++) disposers.push(mountCar(svg,map,avenue,`${seed}|car${i}`,CAR_COLORS[i]||CAR_COLORS.at(-1)));
+  return ()=>{for(const dispose of disposers) dispose();};
+}
+
+function mountCar(svg,map,avenue,seed,color=CAR_COLORS[0]) {
   const route=createCarRoute(map,avenue,seed);
   if(!route) return ()=>{};
   const group=document.createElementNS('http://www.w3.org/2000/svg','g');
-  group.setAttribute('id','decorativeCar');group.setAttribute('pointer-events','none');group.setAttribute('aria-hidden','true');
-  // Four wheels and one body; local +X is forward. Total footprint: 6 x 4.
-  for(const [x,y,w,h,fill] of [[-2.4,-2,1.4,1,'#34383d'],[1,-2,1.4,1,'#34383d'],[-2.4,1,1.4,1,'#34383d'],[1,1,1.4,1,'#34383d'],[-3,-1.4,6,2.8,'#e13d40']]) {
+  group.setAttribute('class','decorative-car');group.setAttribute('data-car',color);group.setAttribute('pointer-events','none');group.setAttribute('aria-hidden','true');
+  // El auto se dibuja en unidades de diseño (4 de ancho por 6.5 de largo, +X hacia
+  // adelante) y después se escala para ocupar CAR_LANE_FILL del ancho de la calzada
+  // por la que va, dejando el mismo margen proporcional a cada lado. Si el barrio
+  // tiene avenida, la calzada más angosta que recorre es media avenida, y de ahí
+  // sale el límite.
+  const lane=avenue?AVENUE_ROADWAY:ROAD_WIDTH;
+  const scale=lane*CAR_LANE_FILL/CAR_ACROSS;
+  // Un bloque rojo y nada más: a los tamaños en que se ve el auto, cualquier
+  // detalle interior es ruido.
+  for(const [x,y,w,h,cls] of [
+    [-3.6,-2,7.2,4,'car-body'],
+  ]) {
     const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-    for(const [key,value] of Object.entries({x,y,width:w,height:h,fill})) rect.setAttribute(key,value);
+    for(const [key,value] of Object.entries({x,y,width:w,height:h})) rect.setAttribute(key,value);
+    rect.setAttribute('class',cls);
     group.appendChild(rect);
   }
-  const draw=p=>group.setAttribute('transform',`translate(${p.x} ${p.y}) rotate(${p.angle})`);
+  const draw=p=>group.setAttribute('transform',`translate(${p.x} ${p.y}) rotate(${p.angle}) scale(${scale})`);
   draw(route.initial);svg.appendChild(group);
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
   let frames=route.next(),elapsed=0,last=null,raf=null,disposed=false;
@@ -2042,6 +2795,22 @@ function mountCar(svg,map,avenue,seed) {
 
 // ---- ui.js ----
 
+
+// Marcas de texto de cada calificación: el color nunca va solo.
+const GRADE_MARKS = { gold: '★', green: '+1', blue: '+2', gray: '✓', red: '✕' };
+
+function formatDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+function localeTag() { return getLanguage() === 'es' ? 'es-AR' : 'en-US'; }
+
+// Una fecha 'YYYY-MM-DD' con el formato del idioma, sin que el huso del
+// dispositivo pueda correrla un día.
+function formatDateKey(key, options) {
+  return new Intl.DateTimeFormat(localeTag(), { timeZone: 'UTC', ...options }).format(new Date(`${key}T12:00:00Z`));
+}
 
 const NS = 'http://www.w3.org/2000/svg';
 function svgEl(tag, attrs = {}) {
@@ -2099,23 +2868,355 @@ function detectPlazas(map, levelNumber = 1) {
   return plazas;
 }
 
+// Orden y agregados de cada mejora. La tienda no sabe nada más que esto.
+const SHOP_UPGRADES = [
+  { id: 'coastal', extra: 'pier' },
+  { id: 'car', extra: 'car' },
+  { id: 'avenue' },
+];
+
 class UI {
   constructor(game) {
     this.game = game;
     this.el = Object.fromEntries([
-      'app','board','scoreValue','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
+      'app','board','boardStage','scoreValue','scoreStatus','livesValue','levelValue','timeStatus','timeValue','seedLabel','modeBadge','casePrompt','testimony','selectedState',
       'interrogateBtn','suspectBtn','clearBtn','accuseBtn','hintBtn','startModal','startBtn','startLevelLabel','accuseModal','cancelAccuseBtn','confirmAccuseBtn',
       'endModal','endEyebrow','endTitle','endScore','endQuestions','endLives','retryBtn','newGameBtn','phaseToast','phaseToastTitle','phaseToastText',
-      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopCoastalCard','shopCoastalState','shopCoastalBtn','shopAvenueCard','shopAvenueState','shopAvenueBtn','shopCarCard','shopCarState','shopCarBtn','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote'
+      'logicToggle','debugPanel','debugOutput','debugBatchOutput','debug100','debugTimed','debugClose','debugResetUnlocks','shopModal','shopBalance','shopLives','shopLifeBtn','shopThemeShelf','shopUpgrades','shopContinueBtn','shopBackBtn','shopStatus','shopBtn','endSkipNote',
+      'menuBtn','levelKicker','homeModal','homeDailyBtn','homeDailyDate','homeDailyStatus','homeCountdown','homeCampaignBtn','homeCampaignLevel','homeStatsBtn',
+      'endGrade','endMinimum','endCountdown','endMenuBtn','reviewBtn','statsModal','statsGrid','calPrev','calNext','calTitle','calWeekdays','calGrid','calDetail',
+      'boardTodayTab','boardOverallTab','boardStatus','boardList','boardNameForm','boardNameInput','statsCloseBtn'
     ].map((id) => [id, document.getElementById(id)]));
     this.streetHighlightEls = [];
     this.blockHighlightEls = [];
+    this.boardTab = 'today';
     this.syncModalLock();
   }
 
   syncModalLock() {
-    const anyOpen = [this.el.startModal, this.el.accuseModal, this.el.endModal,this.el.shopModal].some((el) => el && !el.hidden);
+    const anyOpen = [this.el.homeModal, this.el.startModal, this.el.accuseModal, this.el.endModal, this.el.shopModal, this.el.statsModal].some((el) => el && !el.hidden);
     document.body.classList.toggle('modal-open', anyOpen);
+  }
+
+  // --- Pantalla inicial -------------------------------------------------------
+
+  showHome() {
+    if (!this.el.homeModal) return;
+    this.el.homeModal.hidden = false;
+    this.renderHome();
+    this.startCountdown();
+    this.syncModalLock();
+  }
+
+  hideHome() {
+    if (!this.el.homeModal) return;
+    this.el.homeModal.hidden = true;
+    this.syncModalLock();
+  }
+
+  renderHome() {
+    if (!this.el.homeModal || this.el.homeModal.hidden) return;
+    const g = this.game;
+    const today = g.todayKey();
+    this.homeDate = today;
+    this.el.homeDailyDate.textContent = formatDateKey(today, { weekday: 'long', day: 'numeric', month: 'long' });
+    const record = g.dailyRecord(today);
+    const result = record?.status === 'finished' ? record.result : null;
+    this.el.homeDailyStatus.textContent = result
+      ? (result.won ? t('home.statusWon', { grade: t('grades.' + result.grade + '.name') }) : t('home.statusLost'))
+      : t(record?.log?.length ? 'home.statusPlaying' : 'home.statusNew');
+    this.el.homeDailyBtn.dataset.grade = result?.grade || '';
+    this.el.homeCampaignLevel.textContent = g.campaignStarted
+      ? t('home.campaignResume', { n: g.isDaily ? g.campaignSession?.levelNumber : g.levelNumber })
+      : t('home.campaignLevel', { n: g.isDaily ? g.campaignSession?.levelNumber ?? 1 : g.levelNumber });
+    this.tickCountdown();
+  }
+
+  // Un solo reloj para la pantalla inicial y el cierre del caso diario. Cuando
+  // cambia la fecha, la pantalla inicial pasa sola al misterio nuevo.
+  startCountdown() {
+    if (this.countdownTimer || typeof setInterval !== 'function') return;
+    this.countdownTimer = setInterval(() => this.tickCountdown(), 1000);
+  }
+
+  tickCountdown() {
+    const text = t('home.next', { time: formatDuration(msUntilNextDaily(new Date())) });
+    if (this.el.homeCountdown) this.el.homeCountdown.textContent = text;
+    if (this.el.endCountdown && !this.el.endCountdown.hidden) this.el.endCountdown.textContent = text;
+    if (this.el.homeModal && !this.el.homeModal.hidden && this.homeDate && this.homeDate !== this.game.todayKey()) this.renderHome();
+    if (this.el.statsModal && !this.el.statsModal.hidden && this.statsToday && this.statsToday !== this.game.todayKey()) this.refreshInvestigations();
+  }
+
+  // --- Cierre del caso diario -------------------------------------------------
+
+  showDailyEnd(result) {
+    if (!result) return;
+    this.endResult = { daily: result };
+    this.el.endModal.hidden = false;
+    this.syncModalLock();
+    this.el.endEyebrow.hidden = false;
+    this.el.endEyebrow.textContent = (result.practice ? t('daily.practiceBadge') : t('daily.badge')) + ' · ' + formatDateKey(result.date, { day: 'numeric', month: 'long' });
+    this.el.endTitle.textContent = t(result.won ? 'daily.solved' : 'daily.unsolved');
+    document.getElementById('endMessage').textContent = t(result.won ? 'daily.solvedText' : 'daily.unsolvedText');
+    document.getElementById('endReveal').hidden = result.won;
+    this.renderGradeBadge(this.el.endGrade, result.grade);
+    this.el.endGrade.hidden = false;
+    this.el.endScore.textContent = formatCount(Math.max(0, result.points), 'point');
+    this.el.endQuestions.textContent = formatCount(result.questions, 'question');
+    this.el.endLives.textContent = formatCount(result.lives, 'life');
+    this.el.endMinimum.hidden = false;
+    this.el.endMinimum.textContent = t('daily.minimum', { n: result.minimum }) + ' ' + t(result.practice ? 'daily.practice' : 'daily.official');
+    this.el.endSkipNote.hidden = true;
+    this.el.endCountdown.hidden = false;
+    this.tickCountdown();
+    this.startCountdown();
+    this.el.shopBtn.hidden = true;
+    this.el.endMenuBtn.hidden = false;
+    this.el.reviewBtn.hidden = false;
+    this.el.retryBtn.textContent = t('daily.retry');
+    this.el.newGameBtn.textContent = t('daily.investigations');
+  }
+
+  renderGradeBadge(host, grade) {
+    if (!host) return;
+    host.dataset.grade = grade || '';
+    host.querySelector('.grade-mark').textContent = GRADE_MARKS[grade] || '';
+    host.querySelector('.grade-text strong').textContent = grade ? t('grades.' + grade + '.name') : '';
+    host.querySelector('.grade-text span').textContent = grade ? t('grades.' + grade + '.text') : '';
+  }
+
+  // --- Mis investigaciones ----------------------------------------------------
+
+  showInvestigations(from = null) {
+    const g = this.game;
+    this.statsReturn = from || (!this.el.homeModal.hidden ? 'home' : !this.el.endModal.hidden ? 'end' : null);
+    this.el.homeModal.hidden = true;
+    this.el.endModal.hidden = true;
+    const today = g.todayKey();
+    this.calendarMonth = today.slice(0, 7);
+    this.selectedDate = today;
+    this.el.statsModal.hidden = false;
+    this.syncModalLock();
+    this.refreshInvestigations();
+    g.retryPendingSubmissions?.();
+    this.loadLeaderboard();
+  }
+
+  hideInvestigations() {
+    this.el.statsModal.hidden = true;
+    if (this.statsReturn === 'home') this.showHome();
+    else if (this.statsReturn === 'end' && this.endResult) this.reopenEnd();
+    this.statsReturn = null;
+    this.syncModalLock();
+  }
+
+  refreshInvestigations() {
+    if (!this.el.statsModal || this.el.statsModal.hidden) return;
+    this.statsToday = this.game.todayKey();
+    this.renderStats();
+    this.renderCalendar();
+    this.renderCalendarDetail();
+    this.renderLeaderboard();
+  }
+
+  renderStats() {
+    const s = this.game.dailyStats();
+    const locale = localeTag();
+    const tiles = [['played', s.played], ['solved', s.solved], ['streak', s.currentStreak], ['best', s.bestStreak], ['gold', s.gold], ['points', s.points]];
+    this.el.statsGrid.replaceChildren(...tiles.map(([key, value]) => {
+      const tile = document.createElement('div');
+      tile.className = 'stats-tile';
+      const v = document.createElement('strong');
+      v.textContent = Number(value).toLocaleString(locale);
+      const label = document.createElement('span');
+      label.textContent = t('stats.' + key);
+      tile.append(v, label);
+      return tile;
+    }));
+  }
+
+  renderCalendar() {
+    const g = this.game;
+    const today = this.statsToday;
+    const [year, month] = this.calendarMonth.split('-').map(Number);
+    const first = `${this.calendarMonth}-01`;
+    this.el.calTitle.textContent = formatDateKey(first, { month: 'long', year: 'numeric' });
+    this.el.calPrev.disabled = first <= DAILY_EPOCH;
+    this.el.calNext.disabled = shiftDateKey(first, 32).slice(0, 7) > today.slice(0, 7);
+    // Semana de lunes a domingo, en los dos idiomas.
+    const monday = '2026-01-05';
+    this.el.calWeekdays.replaceChildren(...Array.from({ length: 7 }, (_, i) => {
+      const cell = document.createElement('span');
+      cell.textContent = formatDateKey(shiftDateKey(monday, i), { weekday: 'narrow' });
+      return cell;
+    }));
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const offset = (new Date(`${first}T12:00:00Z`).getUTCDay() + 6) % 7;
+    const records = new Map(g.dailyRecords().map((r) => [r.date, r]));
+    const cells = [];
+    for (let i = 0; i < offset; i += 1) {
+      const pad = document.createElement('span');
+      pad.className = 'calendar-pad';
+      pad.setAttribute('aria-hidden', 'true');
+      cells.push(pad);
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const key = `${this.calendarMonth}-${String(day).padStart(2, '0')}`;
+      const record = records.get(key);
+      const grade = record?.status === 'finished' ? record.result?.grade : null;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'calendar-day';
+      btn.dataset.date = key;
+      if (grade) btn.dataset.grade = grade;
+      else if (record?.log?.length) btn.dataset.state = 'playing';
+      btn.classList.toggle('is-today', key === today);
+      btn.classList.toggle('is-selected', key === this.selectedDate);
+      const locked = key > today || !dailyVersionFor(key);
+      btn.disabled = locked;
+      const num = document.createElement('span');
+      num.className = 'calendar-num';
+      num.textContent = String(day);
+      const mark = document.createElement('span');
+      mark.className = 'calendar-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = grade ? GRADE_MARKS[grade] : '';
+      btn.append(num, mark);
+      const label = formatDateKey(key, { weekday: 'long', day: 'numeric', month: 'long' });
+      btn.setAttribute('aria-label', grade ? `${label}: ${t('grades.' + grade + '.name')}` : label);
+      btn.setAttribute('aria-pressed', String(key === this.selectedDate));
+      btn.addEventListener('click', () => { this.selectedDate = key; this.renderCalendar(); this.renderCalendarDetail(); });
+      cells.push(btn);
+    }
+    this.el.calGrid.replaceChildren(...cells);
+  }
+
+  shiftCalendar(delta) {
+    const [y, m] = this.calendarMonth.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    this.calendarMonth = d.toISOString().slice(0, 7);
+    this.renderCalendar();
+  }
+
+  renderCalendarDetail() {
+    const g = this.game;
+    const key = this.selectedDate;
+    const today = this.statsToday;
+    const host = this.el.calDetail;
+    const title = document.createElement('strong');
+    title.className = 'detail-date';
+    title.textContent = (key === today ? t('stats.today') + ' · ' : '') + formatDateKey(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const nodes = [title];
+    const text = (content, cls = 'detail-note') => { const p = document.createElement('p'); p.className = cls; p.textContent = content; nodes.push(p); return p; };
+    const action = (label, fn, primary = false) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = primary ? 'modal-primary' : 'modal-secondary';
+      b.textContent = label;
+      b.addEventListener('click', () => { this.el.statsModal.hidden = true; this.statsReturn = null; this.syncModalLock(); fn(); });
+      return b;
+    };
+    const actions = document.createElement('div');
+    actions.className = 'detail-actions';
+    const record = g.dailyRecord(key);
+    const result = record?.status === 'finished' ? record.result : null;
+    if (key > today) text(t('stats.future'));
+    else if (!dailyVersionFor(key)) text(t('stats.before'));
+    else if (result) {
+      const badge = document.createElement('div');
+      badge.className = 'grade-badge';
+      badge.innerHTML = '<span class="grade-mark" aria-hidden="true"></span><span class="grade-text"><strong></strong><span></span></span>';
+      this.renderGradeBadge(badge, result.grade);
+      nodes.push(badge);
+      const dl = document.createElement('dl');
+      dl.className = 'detail-stats';
+      for (const [label, value] of [['score', formatCount(result.points, 'point')], ['questions', result.questions], ['minimum', result.minimum], ['lives', result.lives]]) {
+        const dt = document.createElement('dt'); dt.textContent = t('stats.' + label);
+        const dd = document.createElement('dd'); dd.textContent = String(value);
+        dl.append(dt, dd);
+      }
+      nodes.push(dl);
+      if (result.hintUsed) text(t('stats.hint'));
+      if (result.wrongAccusations) text(t('stats.wrong', { n: result.wrongAccusations }));
+      if (result.won && !result.deduced) text(t('stats.guessed'));
+      if (onlineEnabled() && record.submission) text(t('board.' + (record.submission.status === 'accepted' ? 'accepted' : record.submission.status === 'rejected' ? 'rejected' : 'pending')));
+      actions.append(action(t('stats.review'), () => g.openDaily(key)), action(t('stats.practice'), () => g.openDaily(key, { practice: true })));
+    } else if (key === today) {
+      text(t(record?.log?.length ? 'stats.inProgress' : 'stats.unplayed'));
+      actions.append(action(t(record?.log?.length ? 'stats.resume' : 'stats.play'), () => g.openDaily(key), true));
+    } else {
+      text(t('stats.unplayedPast'));
+      actions.append(action(t('stats.practice'), () => g.openDaily(key, { practice: true })));
+    }
+    if (actions.childElementCount) nodes.push(actions);
+    host.replaceChildren(...nodes);
+  }
+
+  // Sin servidor configurado no se muestra ninguna tabla, ni siquiera de ejemplo.
+  renderLeaderboard() {
+    const online = onlineEnabled();
+    this.el.boardTodayTab.setAttribute('aria-selected', String(this.boardTab === 'today'));
+    this.el.boardOverallTab.setAttribute('aria-selected', String(this.boardTab === 'overall'));
+    this.el.boardTodayTab.disabled = !online;
+    this.el.boardOverallTab.disabled = !online;
+    this.el.boardNameForm.hidden = !online;
+    if (!online) {
+      this.el.boardStatus.textContent = t('board.offline');
+      this.el.boardList.replaceChildren();
+      return;
+    }
+    const state = this.boardState || { status: 'loading' };
+    const rows = state[this.boardTab] || [];
+    const mine = state.mine?.[this.boardTab] || null;
+    this.el.boardStatus.textContent = state.status === 'loading' ? t('board.loading') : state.status === 'error' ? t('board.error') : rows.length ? '' : t('board.empty');
+    const me = this.online?.userId;
+    const locale = localeTag();
+    const item = (row) => {
+      const li = document.createElement('li');
+      li.className = 'leaderboard-row';
+      li.classList.toggle('is-me', row.user_id === me);
+      const pos = document.createElement('span'); pos.className = 'leaderboard-pos'; pos.textContent = String(row.position);
+      const name = document.createElement('span'); name.className = 'leaderboard-name-cell';
+      name.textContent = (row.display_name || t('board.anonymous')) + (row.user_id === me ? ` (${t('board.you')})` : '');
+      const pts = document.createElement('span'); pts.className = 'leaderboard-points'; pts.textContent = Number(row.points).toLocaleString(locale);
+      li.append(pos, name, pts);
+      return li;
+    };
+    const list = rows.map(item);
+    if (mine && !rows.some((r) => r.user_id === mine.user_id)) {
+      const gap = document.createElement('li'); gap.className = 'leaderboard-gap'; gap.textContent = '…'; gap.setAttribute('aria-hidden', 'true');
+      list.push(gap, item(mine));
+    }
+    this.el.boardList.replaceChildren(...list);
+  }
+
+  async loadLeaderboard() {
+    if (!onlineEnabled()) { this.renderLeaderboard(); return; }
+    this.online ??= this.game.online || (this.game.online = new OnlineClient());
+    this.boardState = { status: 'loading' };
+    this.renderLeaderboard();
+    try {
+      const date = this.game.todayKey();
+      const [today, overall, mine, profile] = await Promise.all([this.online.todayBoard(date), this.online.overallBoard(), this.online.myRows(date), this.online.profile()]);
+      this.boardState = { status: 'ready', today: today || [], overall: overall || [], mine };
+      if (profile?.display_name && document.activeElement !== this.el.boardNameInput) this.el.boardNameInput.value = profile.display_name;
+    } catch (error) {
+      console.warn(error);
+      this.boardState = { status: 'error' };
+    }
+    this.renderLeaderboard();
+  }
+
+  async saveBoardName() {
+    const name = this.el.boardNameInput.value.trim();
+    if (name.length < 2 || name.length > 20) { this.el.boardStatus.textContent = t('board.nameInvalid'); return; }
+    try {
+      await this.online.setName(name);
+      await this.loadLeaderboard();
+      this.el.boardStatus.textContent = t('board.nameSaved');
+    } catch (error) {
+      this.el.boardStatus.textContent = error.message || t('board.error');
+    }
   }
 
   hideStartModal() {
@@ -2143,6 +3244,8 @@ class UI {
     applyCopy(document);
     document.documentElement.lang=getLanguage();
     document.querySelectorAll('[data-language]').forEach(btn=>btn.addEventListener('click',()=>this.changeLanguage(btn.dataset.language)));
+    // En modo desarrollo arranca preseleccionado el modo que pide la configuración.
+    document.querySelectorAll('.mode-option').forEach((btn) => btn.classList.toggle('is-selected', btn.dataset.mode === this.game.pendingMode));
     document.querySelectorAll('.mode-option').forEach((btn) => btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-option').forEach((b) => b.classList.toggle('is-selected', b === btn));
       this.game.pendingMode = btn.dataset.mode;
@@ -2160,30 +3263,32 @@ class UI {
     this.el.shopLifeBtn.addEventListener('click',()=>this.game.buyLife());
     this.el.shopContinueBtn.addEventListener('click',()=>this.game.nextLevel());
     this.el.shopBackBtn.addEventListener('click',()=>this.game.closeShop());
-    this.el.shopCoastalBtn.addEventListener('click',()=>{
-      if(this.game.coastalUnlocked) this.game.toggleCoastal();
-      else this.game.buyCoastal();
-    });
-    this.el.shopCarBtn.addEventListener('click',()=>{
-      if(this.game.carUnlocked) this.game.toggleCar();
-      else this.game.buyCar();
-    });
-    this.el.shopAvenueBtn.addEventListener('click',()=>{
-      if(this.game.avenueUnlocked) this.game.toggleAvenue();
-      else this.game.buyAvenue();
-    });
-    this.el.shopBtn.addEventListener('click',()=>this.game.openShop());
+    this.buildUpgrades();
     this.buildThemeShelf();
     // Un solo panel, dos disparadores: el de la barra en desktop y el del panel en mobile.
     this.logicToggles = [...document.querySelectorAll('[data-logic-toggle]')];
     for (const btn of this.logicToggles) btn.addEventListener('click', () => this.toggleLogicPanel());
     this.el.timeStatus.addEventListener('click', () => this.game.toggleTheme());
+    // Atajo de desarrollo: el bloque de puntos abre la tienda.
+    this.el.scoreStatus.addEventListener('click', () => this.game.openShop());
     this.el.retryBtn.addEventListener('click', () => this.game.retry());
     this.el.newGameBtn.addEventListener('click', () => this.game.advanceOrNew());
     this.el.debug100.addEventListener('click', () => this.game.runBatchDebug());
     this.el.debugTimed.addEventListener('click', () => this.game.loadTimedDemo());
     this.el.debugResetUnlocks.addEventListener('click', () => this.game.resetUnlocks());
     this.el.debugClose.addEventListener('click', () => this.toggleLogicPanel(false));
+    this.el.menuBtn?.addEventListener('click', () => this.game.goHome());
+    this.el.homeDailyBtn?.addEventListener('click', () => this.game.openDaily());
+    this.el.homeCampaignBtn?.addEventListener('click', () => this.game.openCampaign());
+    this.el.homeStatsBtn?.addEventListener('click', () => this.game.openInvestigations('home'));
+    this.el.endMenuBtn?.addEventListener('click', () => this.game.goHome());
+    this.el.reviewBtn?.addEventListener('click', () => this.game.reviewDaily());
+    this.el.statsCloseBtn?.addEventListener('click', () => this.hideInvestigations());
+    this.el.calPrev?.addEventListener('click', () => this.shiftCalendar(-1));
+    this.el.calNext?.addEventListener('click', () => this.shiftCalendar(1));
+    this.el.boardTodayTab?.addEventListener('click', () => { this.boardTab = 'today'; this.renderLeaderboard(); });
+    this.el.boardOverallTab?.addEventListener('click', () => { this.boardTab = 'overall'; this.renderLeaderboard(); });
+    this.el.boardNameForm?.addEventListener('submit', (e) => { e.preventDefault(); this.saveBoardName(); });
 
     this.el.board.addEventListener('pointerup', (e) => {
       const house = e.target.closest?.('.house');
@@ -2194,7 +3299,8 @@ class UI {
   }
 
   toggleLogicPanel(force = null) {
-    const shouldOpen = force == null ? this.el.debugPanel.hidden : Boolean(force);
+    // El diario es competitivo: el panel con la solución no se abre.
+    const shouldOpen = !this.game.isDaily && (force == null ? this.el.debugPanel.hidden : Boolean(force));
     this.el.debugPanel.hidden = !shouldOpen;
     for (const btn of this.logicToggles || [this.el.logicToggle]) {
       btn.setAttribute('aria-expanded', String(shouldOpen));
@@ -2220,20 +3326,51 @@ class UI {
 
     // Ciudad costera: dos rectángulos detrás del barrio. No captura clics y no
     // participa de la geometría; el oleaje es una sola animación CSS.
-    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide) : null;
+    const coast = level.coastSide ? coastGeometry(level.map, level.coastSide, level.pierCount || 1) : null;
     // La brújula se corre al lado de tierra para no quedar flotando en el agua.
     if (this.el.app) this.el.app.dataset.coast = coast ? coast.side : '';
     if (coast) {
       const sea = svgEl('g', { id: 'sea', class: 'sea', 'data-side': coast.side, 'aria-hidden': 'true' });
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-water' }, coast.water)));
+
+      // Textura del mar: franjas lisas paralelas a la orilla que avanzan hacia ella.
+      // Sin degradés: cada franja es un rectángulo de color plano. El patrón se
+      // extiende un período más allá del borde exterior y se desplaza exactamente un
+      // período, así el bucle es continuo y no aparece ninguna costura.
+      const clip = svgEl('clipPath', { id: 'sea-clip', clipPathUnits: 'userSpaceOnUse' });
+      clip.appendChild(svgEl('rect', Object.assign({}, coast.water)));
+      defs.appendChild(clip);
+      const toShore = coast.side === 'left' ? 1 : -1;
+      const outer = coast.side === 'left' ? coast.water.x : coast.water.x + coast.water.width;
+      const texture = svgEl('g', { class: 'sea-texture', 'clip-path': 'url(#sea-clip)' });
+      // Cada capa repite un motivo de bandas anchas y desiguales dentro de su
+      // período. El patrón sigue siendo periódico, así que el desplazamiento de un
+      // período exacto mantiene el bucle sin costura, pero ya no se lee como rayas
+      // regulares. Los dos períodos son casi coprimos: el cruce de ambas capas rompe
+      // la repetición a la vista.
+      for (const [cls, period, motif, duration] of [
+        // Las duraciones salen del período: 132u/50s ≈ 2,6 u/s. La capa de fondo va
+        // bastante más despacio, que es lo que da la sensación de profundidad. Ambas
+        // se alargaron en la misma proporción, así el cruce entre capas no cambia.
+        ['sea-band sea-band-near', 132, [[0, 48], [78, 24]], '50s'],
+        ['sea-band sea-band-far', 208, [[0, 34], [104, 62]], '120s'],
+      ]) {
+        const layer = svgEl('g', { class: cls, style: `--sea-shift:${toShore * period}px;--sea-duration:${duration}` });
+        const steps = Math.ceil(coast.water.width / period) + 2;
+        for (let i = 0; i < steps; i += 1) {
+          for (const [offset, band] of motif) {
+            const from = outer + toShore * (i * period - period + offset);
+            layer.appendChild(svgEl('rect', {
+              x: toShore > 0 ? from : from - band, y: coast.water.y,
+              width: band, height: coast.water.height,
+            }));
+          }
+        }
+        texture.appendChild(layer);
+      }
+      sea.appendChild(texture);
+
       sea.appendChild(svgEl('rect', Object.assign({ class: 'sea-foam' }, coast.foam)));
-      // The outer water extends beyond the viewport; animate a subtle visible
-      // edge inside the crop using the same lightweight tide as the shore.
-      const edgeWidth=3;
-      sea.appendChild(svgEl('rect', {
-        class:'sea-foam sea-outer', x:coast.side==='left'?0:level.map.width-edgeWidth,
-        y:coast.water.y, width:edgeWidth, height:coast.water.height,
-      }));
       svg.appendChild(sea);
     }
     const lotsGroup = svgEl('g', { id: 'lotGrid', 'aria-hidden': 'true' });
@@ -2273,11 +3410,11 @@ class UI {
     }
     // La línea cortada va después de todas las calzadas: en los cruces queda arriba
     // del asfalto de la calle que cruza, no debajo.
-    if (coast?.pier) {
-      const pier = { x1: coast.pier.x1, y1: coast.pier.y, x2: coast.pier.x2, y2: coast.pier.y };
-      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': coast.pier.streetKey }, pier)));
+    for (const p of coast?.piers || []) {
+      const pier = { x1: p.x1, y1: p.y, x2: p.x2, y2: p.y };
+      roadsGroup.appendChild(svgEl('line', Object.assign({ class: 'road road-pier', 'data-street': p.streetKey }, pier)));
       for (const d of centerLineDashes(pier, level.map.cellSize)) {
-        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': coast.pier.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
+        roadsGroup.appendChild(svgEl('path', { class: 'road-center', 'data-street': p.streetKey, d: `M${d.x1.toFixed(2)} ${d.y1.toFixed(2)}L${d.x2.toFixed(2)} ${d.y2.toFixed(2)}` }));
       }
     }
     for (const s of enabledRoads) {
@@ -2336,7 +3473,107 @@ class UI {
     }
     svg.appendChild(plazasGroup);
     svg.appendChild(roadsGroup);
-    if(level.carEnabled) this.disposeCar=mountCar(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`);
+    if(level.carEnabled) this.disposeCar=mountCars(svg,level.map,level.avenue,`${this.game.seed}|${this.game.levelNumber}`,level.carCount||1);
+
+    // Capa de selección: siempre el último hijo del SVG, así el contorno queda por
+    // encima de retícula, calles y casas sin reordenar nada al hacer clic. El clip
+    // la recorta al rectángulo de la casa, de modo que el trazo sigue el perímetro
+    // exterior exacto (1 a 4 lotes) sin invadir la calle.
+    const selClip = svgEl('clipPath', { id: 'selection-clip', clipPathUnits: 'userSpaceOnUse' });
+    const selClipRect = svgEl('rect', { x: 0, y: 0, width: 0, height: 0 });
+    selClip.appendChild(selClipRect);
+    defs.appendChild(selClip);
+    const selection = svgEl('g', { class: 'selection-layer', 'clip-path': 'url(#selection-clip)', 'pointer-events': 'none', 'aria-hidden': 'true' });
+    const halo = svgEl('rect', { class: 'selection-halo', x: 0, y: 0, width: 0, height: 0 });
+    const edge = svgEl('rect', { class: 'selection-edge', x: 0, y: 0, width: 0, height: 0 });
+    selection.appendChild(halo);
+    selection.appendChild(edge);
+    selection.setAttribute('hidden', 'hidden');
+    svg.appendChild(selection);
+    this.selectionLayer = selection;
+    this.selectionRects = [selClipRect, halo, edge];
+  }
+
+  // Una sola capa reutilizada: sólo se mueven cuatro atributos por selección.
+  updateSelectionOutline() {
+    const layer = this.selectionLayer;
+    if (!layer || !this.selectionRects) return;
+    const house = this.game.selectedHouse;
+    if (!house) { layer.setAttribute('hidden', 'hidden'); return; }
+    const r = house.rect;
+    for (const rect of this.selectionRects) {
+      rect.setAttribute('x', r.x);
+      rect.setAttribute('y', r.y);
+      rect.setAttribute('width', r.width);
+      rect.setAttribute('height', r.height);
+    }
+    layer.removeAttribute('hidden');
+  }
+
+  // Transición horizontal entre barrios: dos escenas completas y un único
+  // transform sobre el contenedor. No se anima ninguna casa por separado.
+  slideScene(prepare, done) {
+    const stage = this.el.boardStage;
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!stage || reduce || this.sliding) {
+      prepare();
+      // Sin animación el bloqueo se sostiene un instante igual: un doble toque
+      // accidental en SIGUIENTE BARRIO no debe saltearse un barrio.
+      setTimeout(() => done?.(), 350);
+      return;
+    }
+    this.sliding = true;
+    const outgoing = this.el.board.cloneNode(true);
+    outgoing.removeAttribute('id');
+    outgoing.setAttribute('aria-hidden', 'true');
+    // Los dos SVG conviven mientras dura la transición: se renombran los id del
+    // clon para que los clip-path de la escena nueva no queden apuntando a él.
+    for (const node of outgoing.querySelectorAll('[id]')) node.id = `ghost-${node.id}`;
+    for (const node of outgoing.querySelectorAll('[clip-path]')) {
+      node.setAttribute('clip-path', node.getAttribute('clip-path').replace(/url\(#/g, 'url(#ghost-'));
+    }
+    // Un clon reinicia sus animaciones CSS, así que el oleaje saltaría al comienzo
+    // del ciclo justo al empezar la transición. Se copia el transform que tenía en
+    // ese instante y se corta la animación: el mar saliente queda exactamente donde
+    // estaba y se va de cuadro con su escena.
+    const liveWaves = this.el.board.querySelectorAll('.sea-band, .sea-foam');
+    const ghostWaves = outgoing.querySelectorAll('.sea-band, .sea-foam');
+    liveWaves.forEach((node, i) => {
+      const ghost = ghostWaves[i];
+      if (!ghost) return;
+      const frozen = window.getComputedStyle(node).transform;
+      ghost.style.animation = 'none';
+      if (frozen && frozen !== 'none') ghost.style.transform = frozen;
+    });
+    stage.insertBefore(outgoing, this.el.board);
+    prepare();
+    // Entre las dos escenas va una franja que continúa el borde por el que sale la
+    // ciudad saliente: agua si su costa da a la derecha, fondo del tablero si no.
+    const seam = document.createElement('div');
+    seam.className = 'scene-seam';
+    seam.setAttribute('aria-hidden', 'true');
+    if (outgoing.querySelector('.sea')?.getAttribute('data-side') === 'right') seam.dataset.fill = 'sea';
+    stage.insertBefore(seam, this.el.board);
+    // El desplazamiento vive en CSS (un ancho de tablero más la separación entre
+    // escenas), así no hay dos números que mantener sincronizados.
+    stage.classList.add('is-sliding');
+    void stage.offsetWidth;
+    stage.classList.add('is-shifted');
+    let timer = 0;
+    const finish = () => {
+      if (!this.sliding) return;
+      stage.removeEventListener('transitionend', onEnd);
+      clearTimeout(timer);
+      stage.classList.remove('is-sliding');
+      stage.classList.remove('is-shifted');
+      outgoing.remove();
+      seam.remove();
+      this.sliding = false;
+      done?.();
+    };
+    const onEnd = (e) => { if (e.target === stage) finish(); };
+    stage.addEventListener('transitionend', onEnd);
+    timer = setTimeout(finish, 1400);
   }
 
   getHouseEl(id) { return this.el.board.querySelector(`[data-house-id="${id}"]`); }
@@ -2344,6 +3581,7 @@ class UI {
   refresh() {
     const g = this.game;
     this.el.scoreValue.textContent = Math.max(0, g.score).toLocaleString(getLanguage()==='es'?'es-AR':'en-US');
+    this.el.scoreStatus.disabled = !g.canUseShop() || g.shopOpen;
     this.el.livesValue.replaceChildren(...Array.from({length:CONFIG.STARTING_LIVES},(_,i)=>{
       const dot=document.createElement('span');
       dot.className='life-dot '+(i<g.lives?'life-active':'life-empty')+(g.losingLife && i===g.lives-1?' life-losing':'');
@@ -2353,10 +3591,22 @@ class UI {
     }));
     this.el.livesValue.setAttribute('aria-label',formatCount(g.lives,'life'));
     this.el.livesValue.setAttribute('aria-live','polite');
-    this.el.levelValue.textContent = String(g.levelNumber);
+    // En el diario el número de nivel no se muestra: en su lugar va la fecha.
+    if (g.isDaily && g.daily) {
+      if (this.el.levelKicker) this.el.levelKicker.textContent = t('labels.daily');
+      this.el.levelValue.textContent = formatDateKey(g.daily.date, { day: '2-digit', month: '2-digit' });
+      this.el.modeBadge.textContent = t(g.daily.practice ? 'daily.practiceBadge' : 'daily.badge');
+    } else {
+      if (this.el.levelKicker) this.el.levelKicker.textContent = t('labels.level');
+      this.el.levelValue.textContent = String(g.levelNumber);
+      this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
+    }
+    this.el.app.dataset.context = g.isDaily ? 'daily' : 'campaign';
+    for (const btn of this.logicToggles || []) btn.hidden = Boolean(g.isDaily);
+    if (g.isDaily && this.el.debugPanel && !this.el.debugPanel.hidden) this.toggleLogicPanel(false);
+    if (this.el.buyLifeBtn) this.el.buyLifeBtn.hidden = Boolean(g.isDaily);
     this.el.seedLabel.textContent = '';
     this.el.seedLabel.hidden = true;
-    this.el.modeBadge.textContent = t(g.mode === 'assist' ? 'intro.assist' : 'intro.normal').toUpperCase();
     if (this.el.startLevelLabel) this.el.startLevelLabel.textContent = uiText.intro.level(g.levelNumber);
 
     if (g.level?.timed && !g.shopOpen) {
@@ -2398,6 +3648,8 @@ class UI {
       if (sleep) sleep.style.display = unavailable ? '' : 'none';
     }
 
+    this.updateSelectionOutline();
+
     const selected = g.selectedHouse;
     const has = Boolean(selected);
     const unavailable = has && g.level.timed && g.currentHour >= selected.availableUntil && !selected.asked;
@@ -2420,6 +3672,57 @@ class UI {
   }
 
   showShop(show) { this.el.shopModal.hidden=!show; this.syncModalLock(); }
+
+  // Una tarjeta por mejora, todas iguales: ícono, nombre, una línea de ayuda y un
+  // control a la derecha (comprar si está bloqueada, ON/OFF si ya es tuya). Los
+  // agregados —autos y puertos— cuelgan de su tarjeta, no son tarjetas aparte.
+  buildUpgrades() {
+    const host=this.el.shopUpgrades;
+    if(!host) return;
+    host.innerHTML='';
+    this.upgradeCards=SHOP_UPGRADES.map(upgrade=>{
+      const card=document.createElement('article');
+      card.className='shop-card';
+      card.dataset.upgrade=upgrade.id;
+      const head=document.createElement('div');
+      head.className='shop-card-head';
+      const icon=document.createElement('span');
+      icon.className='shop-card-icon';
+      icon.dataset.icon=upgrade.id;
+      icon.setAttribute('aria-hidden','true');
+      const text=document.createElement('div');
+      text.className='shop-card-text';
+      const title=document.createElement('h3');
+      const help=document.createElement('p');
+      text.append(title,help);
+      const control=document.createElement('button');
+      control.type='button';
+      control.addEventListener('click',()=>{
+        if(this.game.isUpgradeOwned(upgrade.id)) this.game.toggleUpgrade(upgrade.id);
+        else this.game.buyUpgrade(upgrade.id);
+      });
+      head.append(icon,text,control);
+      card.appendChild(head);
+      let extra=null;
+      if(upgrade.extra) {
+        const row=document.createElement('div');
+        row.className='shop-extra';
+        const label=document.createElement('span');
+        label.className='shop-extra-label';
+        const count=document.createElement('span');
+        count.className='shop-extra-count';
+        const add=document.createElement('button');
+        add.type='button';
+        add.className='shop-add';
+        add.addEventListener('click',()=>this.game.buyExtra(upgrade.extra));
+        row.append(label,count,add);
+        card.appendChild(row);
+        extra={ row, label, count, add, id: upgrade.extra };
+      }
+      host.appendChild(card);
+      return { upgrade, card, title, help, control, extra };
+    });
+  }
 
   // Una ficha por ambiente. El texto se rehace en refreshShop, así el cambio de idioma no toca la estructura.
   buildThemeShelf() {
@@ -2473,35 +3776,30 @@ class UI {
       card.classList.toggle('is-active',active);
       card.classList.toggle('is-locked',!unlocked);
     }
-    const coastLocale=locale;
-    this.el.shopCoastalCard.classList.toggle('is-active',g.coastalUnlocked && g.coastalEnabled);
-    this.el.shopCoastalCard.classList.toggle('is-locked',!g.coastalUnlocked);
-    this.el.shopCoastalState.textContent=g.coastalUnlocked
-      ? t(g.coastalEnabled?'shop.coastalOn':'shop.coastalOff')
-      : '\u2212'+CONFIG.COASTAL_COST.toLocaleString(coastLocale);
-    this.el.shopCoastalBtn.textContent=g.coastalUnlocked
-      ? t(g.coastalEnabled?'shop.turnOff':'shop.turnOn')
-      : t('shop.buy');
-    this.el.shopCoastalBtn.disabled=!g.coastalUnlocked && g.score<CONFIG.COASTAL_COST;
-    this.el.shopCoastalBtn.setAttribute('aria-pressed',String(g.coastalUnlocked && g.coastalEnabled));
-
-    this.el.shopAvenueCard.classList.toggle('is-active',g.avenueUnlocked && g.avenueEnabled);
-    this.el.shopAvenueCard.classList.toggle('is-locked',!g.avenueUnlocked);
-    this.el.shopAvenueState.textContent=g.avenueUnlocked
-      ? t(g.avenueEnabled?'shop.coastalOn':'shop.coastalOff')
-      : '\u2212'+CONFIG.AVENUE_COST.toLocaleString(coastLocale);
-    this.el.shopAvenueBtn.textContent=g.avenueUnlocked
-      ? t(g.avenueEnabled?'shop.turnOff':'shop.turnOn')
-      : t('shop.buy');
-    this.el.shopAvenueBtn.disabled=!g.avenueUnlocked && g.score<CONFIG.AVENUE_COST;
-    this.el.shopAvenueBtn.setAttribute('aria-pressed',String(g.avenueUnlocked && g.avenueEnabled));
-
-    this.el.shopCarCard.classList.toggle('is-active',g.carUnlocked && g.carEnabled);
-    this.el.shopCarCard.classList.toggle('is-locked',!g.carUnlocked);
-    this.el.shopCarState.textContent=g.carUnlocked ? t(g.carEnabled?'shop.carOn':'shop.carOff') : '−'+CONFIG.CAR_COST.toLocaleString(coastLocale);
-    this.el.shopCarBtn.textContent=t(g.carUnlocked ? (g.carEnabled?'shop.turnOff':'shop.turnOn') : 'shop.buy');
-    this.el.shopCarBtn.disabled=!g.carUnlocked && g.score<CONFIG.CAR_COST;
-    this.el.shopCarBtn.setAttribute('aria-pressed',String(g.carUnlocked && g.carEnabled));
+    for(const entry of this.upgradeCards||[]) {
+      const { upgrade, card, title, help, control, extra } = entry;
+      const owned=g.isUpgradeOwned(upgrade.id);
+      const on=owned && g.isUpgradeEnabled(upgrade.id);
+      title.textContent=t('shop.'+upgrade.id);
+      help.textContent=t('shop.'+upgrade.id+'Help');
+      card.classList.toggle('is-owned',owned);
+      card.classList.toggle('is-locked',!owned);
+      card.classList.toggle('is-on',on);
+      control.className=owned?'shop-control shop-switch':'shop-control shop-buy';
+      control.textContent=owned?t(on?'shop.on':'shop.off'):'\u2212'+g.upgradeCost(upgrade.id).toLocaleString(locale);
+      control.disabled=!owned && !g.canBuyUpgrade(upgrade.id);
+      if(owned) { control.setAttribute('role','switch'); control.setAttribute('aria-checked',String(on)); }
+      else { control.removeAttribute('role'); control.removeAttribute('aria-checked'); }
+      if(extra) {
+        const count=g.extraCount(extra.id), max=g.extraMax(extra.id), full=count>=max;
+        extra.label.textContent=t('shop.'+(extra.id==='car'?'cars':'piers'));
+        extra.count.textContent=`${count}/${max}`;
+        extra.add.textContent=full?t('shop.maxed'):'+ \u2212'+g.extraCost(extra.id).toLocaleString(locale);
+        extra.add.disabled=!g.canBuyExtra(extra.id);
+        extra.row.classList.toggle('is-full',full);
+        extra.row.hidden=!owned;
+      }
+    }
     const locked=THEMES.filter(theme=>theme.cost>0 && !g.isThemeUnlocked(theme.id));
     const cheapest=locked.reduce((min,theme)=>Math.min(min,theme.cost),Infinity);
     this.el.shopStatus.textContent=t(!locked.length?'shop.saved':g.score<cheapest?'shop.saveMore':'shop.permanent');
@@ -2513,7 +3811,9 @@ class UI {
     this.renderPrompt();
     this.refresh();
     document.querySelectorAll('[data-language]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.language===getLanguage())));
-    if (!this.el.endModal.hidden && this.endResult) this.showEnd(this.endResult);
+    if (!this.el.endModal.hidden && this.endResult) this.reopenEnd();
+    this.renderHome();
+    this.refreshInvestigations();
     this.renderBatch();
   }
 
@@ -2608,6 +3908,9 @@ class UI {
     this.el.endModal.hidden = false;
     this.syncModalLock();
     this.el.endEyebrow.hidden = true;
+    // Los agregados del diario no aparecen en la campaña.
+    for (const key of ['endGrade','endMinimum','endCountdown','endMenuBtn','reviewBtn']) if (this.el[key]) this.el[key].hidden = true;
+    if (this.el.retryBtn) this.el.retryBtn.textContent = t('defeat.retry');
     this.el.endTitle.textContent = won ? uiText.victory.title : uiText.defeat.title;
     document.getElementById('endMessage').textContent = won ? uiText.victory.text : uiText.defeat.text;
     document.getElementById('endReveal').hidden = won;
@@ -2623,6 +3926,7 @@ class UI {
   // La tienda se cierra sin avanzar: vuelve la pantalla de fin de caso tal como estaba.
   reopenEnd() {
     const g=this.game;
+    if (this.endResult?.daily) { this.showDailyEnd(g.isDaily && g.finished ? { ...g.dailyResult() } : this.endResult.daily); return; }
     this.showEnd(this.endResult || { won:g.lastOutcomeWon, score:g.score, questions:g.observations.length, lives:g.lives });
   }
 
@@ -2659,6 +3963,7 @@ class UI {
 
   updateDebug() {
     if(!this.game.level || !this.el.debugOutput) return;
+    if(this.game.isDaily) { this.el.debugOutput.textContent=''; return; }
     const level=this.game.level,m=level.metrics,sets=m.minimumSolvingHouseSets||[];
     const candidates=getConsistentCandidates(level,this.game.observations);
     const d=key=>t('debug.'+key), line=(key,value)=>d(key)+'  '+value;
